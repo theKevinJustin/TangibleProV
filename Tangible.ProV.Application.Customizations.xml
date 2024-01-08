@@ -1,0 +1,2548 @@
+﻿<?xml version="1.0" encoding="utf-8"?><ManagementPack ContentReadable="true" SchemaVersion="2.0" OriginalSchemaVersion="1.1" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+  <Manifest>
+    <Identity>
+      <ID>Tangible.ProV.Application.Customizations</ID>
+      <Version>1.0.2.0</Version>
+    </Identity>
+    <Name>Tangible ProV Application Customizations</Name>
+    <References>
+      <Reference Alias="Health">
+        <ID>System.Health.Library</ID>
+        <Version>7.0.8433.0</Version>
+        <PublicKeyToken>31bf3856ad364e35</PublicKeyToken>
+      </Reference>
+      <Reference Alias="MSIL">
+        <ID>Microsoft.SystemCenter.InstanceGroup.Library</ID>
+        <Version>7.5.8501.0</Version>
+        <PublicKeyToken>31bf3856ad364e35</PublicKeyToken>
+      </Reference>
+      <Reference Alias="Performance">
+        <ID>System.Performance.Library</ID>
+        <Version>7.0.8433.0</Version>
+        <PublicKeyToken>31bf3856ad364e35</PublicKeyToken>
+      </Reference>
+      <Reference Alias="SC">
+        <ID>Microsoft.SystemCenter.Library</ID>
+        <Version>7.0.8433.0</Version>
+        <PublicKeyToken>31bf3856ad364e35</PublicKeyToken>
+      </Reference>
+      <Reference Alias="System">
+        <ID>System.Library</ID>
+        <Version>7.5.8501.0</Version>
+        <PublicKeyToken>31bf3856ad364e35</PublicKeyToken>
+      </Reference>
+      <Reference Alias="Windows">
+        <ID>Microsoft.Windows.Library</ID>
+        <Version>7.5.8501.0</Version>
+        <PublicKeyToken>31bf3856ad364e35</PublicKeyToken>
+      </Reference>
+    </References>
+  </Manifest>
+  <TypeDefinitions>
+    <EntityTypes>
+      <ClassTypes>
+        <ClassType ID="Tangible.ProV.Seed.Class" Accessibility="Public" Abstract="false" Base="Windows!Microsoft.Windows.LocalApplication" Hosted="true" Singleton="false" Extension="false" />
+	  </ClassTypes>
+    </EntityTypes>
+    <ModuleTypes>
+      <DataSourceModuleType ID="Tangible.ProV.ProVService.Report.Script.Alert.Rule.Datasource" Accessibility="Internal" Batching="false">
+        <Configuration>
+          <xsd:element minOccurs="1" type="xsd:integer" name="TimeoutSeconds" xmlns:xsd="http://www.w3.org/2001/XMLSchema" />
+        </Configuration>
+        <OverrideableParameters>
+          <OverrideableParameter ID="TimeoutSeconds" Selector="$Config/TimeoutSeconds$" ParameterType="int" />
+        </OverrideableParameters>
+        <ModuleImplementation Isolation="Any">
+          <Composite>
+            <MemberModules>
+              <DataSource ID="Scheduler" TypeID="System!System.Scheduler">
+                <Scheduler>
+                  <WeeklySchedule>
+                    <Windows>
+                      <Daily>
+                        <Start>06:06</Start>
+                        <End>06:30</End>
+                        <DaysOfWeekMask>62</DaysOfWeekMask>
+                      </Daily>
+                    </Windows>
+                  </WeeklySchedule>
+                  <ExcludeDates />
+                </Scheduler>
+              </DataSource>
+              <ProbeAction ID="PA" TypeID="Windows!Microsoft.Windows.PowerShellPropertyBagProbe">
+                <ScriptName>Tangible.ProV.ProVService.Report.Script.Alert.Rule.Datasource.v10200.ps1</ScriptName>
+                <ScriptBody>
+#=================================================================================
+#  Script to gather Tangible* report data for AD Team
+#
+#  Author: Kevin Justin
+#  v1.0
+#=================================================================================
+
+
+# Constants section - modify stuff here:
+#=================================================================================
+# Assign script name variable for use in event logging.
+# ScriptName should be the same as the ID of the module that the script is contained in
+$ScriptName = "Tangible.ProV.ProVService.Report.Script.Alert.Rule.Datasource.v10200.ps1"
+$EventID = "584"
+#=================================================================================
+
+
+# Starting Script section - All scripts get this
+#=================================================================================
+# Gather the start time of the script
+$StartTime = Get-Date
+#Set variable to be used in logging events
+$whoami = whoami
+# Load MOMScript API
+$momapi = New-Object -comObject MOM.ScriptAPI
+#Log script event that we are starting task
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Script is starting. `n Running as ($whoami).")
+#=================================================================================
+
+
+# PropertyBag Script section - Monitoring scripts get this
+#=================================================================================
+# Load SCOM PropertyBag function
+$bag = $momapi.CreatePropertyBag()
+#=================================================================================
+
+
+# Begin MAIN script section
+#=================================================================================
+
+#For a simple example - get files in Windows Temp:
+$date = get-date -uFormat "%Y-%m-%d"
+$Age = [DateTime](Get-Date).AddDays(-1)
+
+# Grab past 24 hours
+if ( (get-date).DayOfWeek -ne "Monday" )
+	{
+	$Time = [DateTime](Get-Date).AddDays(-1)
+	}
+if ( (get-date).DayOfWeek -eq "Monday" )
+	{
+	$Time = [DateTime](Get-Date).AddDays(-3)
+	}
+
+
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Gather Tangible ProVService Alerts for date ($date).")
+
+$DSMessage = "Proactive Tangible ProVService Alerts for date ($date)."
+
+#
+# Clean up old reports
+#===============================================
+$OpenAlerts = get-scomalert -ResolutionState (0..254) -Name "Tangible ProV ProVService Service*"
+
+$OpenAlerts = $OpenAlerts | ? { $_.TimeRaised -ge $Time }
+# $OpenAlerts.count
+
+# Closed alerts
+$ClosedAlerts = get-scomalert -ResolutionState 255 -Name "Tangible ProV ProVService Service*" | ? { $_.TimeRaised -ge $Time }
+# $ClosedAlerts.count
+
+# Alerts since past report
+$TotalProVAlerts = $OpenAlerts.count + $ClosedAlerts
+
+# Alert monitors
+$TotalProVMonitors = $OpenAlerts | where { ( $_.Name -like "Tangible ProV ProVService Service Monitor*" ) `
+	-OR ( $_.Name -like "Tangible ProV Application Repeated Event*" ) `
+	-OR ( $_.Name -like "Tangible ProV Application 4402 Repeat Event*" ) `
+	}
+# $TotalProVMonitors.Count
+
+
+# Total in history
+$TotalProVMonitorHistory = $OpenAlerts | ? { $_.TimeRaised -ge $Time }
+# $TotalProVMonitorHistory.Count
+
+
+#
+# List rules to close
+
+$TangibleProVRulesToClose = @()
+
+
+$TangibleProVRulesToClose = get-scomalert -ResolutionState (0..254) -Name "Tangible ProV ProVService Service*"
+# $TangibleProVRulesToClose.Count
+
+$TangibleProVRulesAutoClose = $TangibleProVRulesToClose | ? { $_.TimeRaised -gt $Time }
+# $TangibleProVRulesAutoClose.Count
+
+
+# Set up array for unhealthy agent report
+$TProVMessage = @()
+
+if ( $OpenAlerts.Count -eq 0 )
+	{
+	$TProVMessage += "ZERO Tangible ProVService alerts for date ($date)."
+	}
+
+if ( $OpenAlerts.Count -gt 0 )
+	{
+	$TProVMessage += ""
+	$TProVMessage += $DSMessage
+	$TProVMessage += ""
+	$TProVMessage += "# Open ProV alerts = $($OpenAlerts.Count)"
+	$TProVMessage += ""
+	$TProVMessage += "# Since last report run:"
+	$TProVMessage += "#-----------------------"
+	$TProVMessage += "# Total ProV alerts = $($TotalProVAlerts)"
+	$TProVMessage += "# Auto-closed monitors = $($TotalProVMonitorHistory.Count)"
+	$TProVMessage += "# Auto-closed rules = $($TangibleProVRulesAutoClose.Count)"
+	$TProVMessage += ""
+	$TProVMessage += "# Total automation closures:"
+	$TProVMessage += "#---------------------------"
+	$TProVMessage += "# Auto-closed monitors = $($TotalProVMonitors.Count)"
+	$TProVMessage += "# Auto-closed rules = $($TangibleProVRulesToClose.Count)"
+	$TProVMessage += ""
+	$TProVMessage += ""
+	$TProVMessage += "# Unhealthy Tangible ProV service alert details"
+	$TProVMessage += "#=============================================="
+	$TProVMessage += $OpenAlerts | ft NetBiosComputerName,TimeRaised,RepeatCount,Name -auto
+	$TProVMessage += "#=============================================="
+	$TProVMessage += ""
+	$TProVMessage += "# Closed Tangible ProV service alert details"
+	$TProVMessage += "#=============================================="
+	$TProVMessage += $ClosedAlerts | sort -property NetBiosComputerName | sort -property RepeatCount -desc | ft NetBiosComputerName,TimeRaised,RepeatCount,Name -auto
+	$TProVMessage += "#=============================================="
+	$TProVMessage += ""
+	}
+
+# $TProVMessage
+
+$TProVMessage = $TProVMessage | out-string
+
+$TProVMessage
+
+
+# Rule closure logic
+#=================================================================================
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Proactive Tangible ProV Application rule reset started for ($date)")
+
+
+if ( $TangibleProVRulesAutoClose.Count -gt 0 )
+	{
+	$TangibleProVRulesAutoClose | Set-SCOMAlert -ResolutionState 255 -Comment "Auto close per Proactive Tangible ProV Application datasource runs M-F"
+	}
+
+# Write event for rule closure
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Proactive Tangible ProV Application rule reset completed for ($date)")
+
+#=================================================================================
+
+
+#=================================================================================
+# Reset Monitors Script base code modified
+# Put ps1 in mgmtpacks folder
+# https://sc.scomurr.com/scom-2012-monitor-reset-cleaning-up-the-environment/
+#	Download
+# https://gallery.technet.microsoft.com/SCOM-2012-Batch-reset-63a17534
+
+#Alternate
+#https://gallery.technet.microsoft.com/scriptcenter/Auto-reset-script-for-d8b775ca
+
+# Changed up logic to sort unique classes in mgmnt pack families.
+# Added Age variable for monitors thanks to Aris Somatis - $Age specified in top level variables
+# Cycling through monitors made reset loop huge ~650 monitors when only ~50 classes
+# New logic reduced runtime from 8 minutes to roughly 8 seconds
+#=================================================================================
+
+# Write event for rule closure
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Proactive Tangible ProV Application Monitors reset started for ($date).")
+
+
+# Create Array for all the unhealthy monitors
+$TangibleProVMonitorsToAutoClose = @("Tangible ProV ProVService Service Monitor","Tangible ProV Application Repeated Event","Tangible ProV Application 4402 Repeat Event" )
+# $TangibleProVMonitorsToAutoClose
+
+if ( $OpenAlerts.Count -gt 0 )
+	{
+	foreach ($MonitorDisplayName in $TangibleProVMonitorsToAutoClose)
+		{
+		$Monitors = @(Get-SCOMMonitor -DisplayName $MonitorDisplayName)
+
+		# Set up monitor objects to reset
+		
+		foreach ($Monitor in $Monitors)
+			{
+			$MonitorClass = Get-SCOMClass -Id $Monitor.Target.Id
+			write-host ""
+			write-host "Monitor Class = " + $MonitorClass
+			$ActiveMonitors = Get-SCOMClassInstance -Class $MonitorClass | ? { ($_.healthstate -ne 'Success') -AND ( $_.healthstate -ne 'Uninitialized') -AND ($_.IsAvailable -eq $true) }
+			$UnhealthyMonitors += $ActiveMonitors.Count
+			
+			$ActiveMonitors.Count
+			# $ActiveMonitors | fl -property *
+			write-host "Found" $ActiveMonitors.Count "unhealthy monitors for class" $MonitorClass
+
+			foreach ( $UnhealthyOLDMonitor in $ActiveMonitors )
+				{
+				#if ( $UnhealthyOLDMonitor.AvailabilityLastModified -lt $Age )
+				if ( $UnhealthyOLDMonitor.StateLastModified -lt $Age )
+					{
+					#$UnhealthyMonitors += $ActiveMonitors.Count
+					#UnhealthyOLDMonitor | select AvailabilityLastModified,Path,DisplayName
+					#$UnhealthyOLDMonitor.Count
+					#write-host "Found" + $UnhealthyOLDMonitor.Count + "unhealthy monitor beyond" $Age "days."
+					#write-host ""
+					foreach ($ActiveMonitor in $ActiveMonitors)
+						{
+						write-host " Resetting Health State on '" +$ActiveMonitor.FullName + "'" 
+						$ActiveMonitor.ResetMonitoringState($Monitor.ID)
+						# Debug
+						$ActiveMonitor.ID
+						write-host " Resetting Health State on '" + $ActiveMonitor.FullName + "'" 
+						write-host ""
+						}
+					}
+				}
+			}
+		}
+	# Debug
+	#$MonitorClass | fl -property *
+	#$MonitorClass | select DisplayName,ID
+	}
+
+# Debug Write event for monitor closure
+#=================================================================================
+# Write event for rule closure
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Proactive Tangible ProV Application monitor reset completed for ($date)")
+
+
+#============================================================
+# Tally up all the property bags for datasource
+
+$Result = "GOOD"
+
+# Log
+$Summary = "$TProVMessage `n `nDisclaimer:  This daily summary report is to document the manual tasks used by NOSC to check AD and AD Replication health, Pending Reboot Report, Logical Disk errors,Expiring Certificates, Unhealthy Server/Agents, Unhealthy agent workflow/script alerts, and Servers in Maintenance Mode"
+
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"$TProVMessage`n `nDisclaimer:  This daily summary report is to document the manual tasks used by NOSC to check AD and AD Replication health, Pending Reboot Report, Logical Disk errors,Expiring Certificates, Unhealthy Server/Agents, Unhealthy agent workflow/script alerts, and Servers in Maintenance Mode")
+
+  $bag.AddValue('Message',$DSMessage)
+  $bag.AddValue('Summary',$Summary)
+
+
+# Return all bags
+$bag
+
+
+#=================================================================================
+# End MAIN script section
+
+
+# End of script section
+#=================================================================================
+#Log an event for script ending and total execution time.
+$EndTime = Get-Date
+$ScriptTime = ($EndTime - $StartTime).TotalSeconds
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Script Completed. Script Runtime: ($ScriptTime) seconds.")
+#=================================================================================
+# End of script
+</ScriptBody>
+                <TimeoutSeconds>$Config/TimeoutSeconds$</TimeoutSeconds>
+              </ProbeAction>
+            </MemberModules>
+            <Composition>
+              <Node ID="PA">
+                <Node ID="Scheduler" />
+              </Node>
+            </Composition>
+          </Composite>
+        </ModuleImplementation>
+        <OutputType>System!System.PropertyBagData</OutputType>
+      </DataSourceModuleType>
+      <WriteActionModuleType ID="Tangible.ProV.ProVService.Report.Script.Alert.Rule.WA" Accessibility="Internal" Batching="false">
+        <Configuration>
+          <xsd:element minOccurs="1" name="TimeoutSeconds" type="xsd:integer" xmlns:xsd="http://www.w3.org/2001/XMLSchema" />
+        </Configuration>
+        <OverrideableParameters>
+          <OverrideableParameter ID="TimeoutSeconds" Selector="$Config/TimeoutSeconds$" ParameterType="int" />
+        </OverrideableParameters>
+        <ModuleImplementation Isolation="Any">
+          <Composite>
+            <MemberModules>
+              <WriteAction ID="PSWA" TypeID="Windows!Microsoft.Windows.PowerShellWriteAction">
+                <ScriptName>Tangible.ProV.ProVService.Report.Script.Alert.Rule.WA.v10200.ps1</ScriptName>
+                <ScriptBody>
+#=================================================================================
+#  Script to gather Tangible* report data for AD Team
+#
+#  Author: Kevin Justin
+#  v1.0
+#=================================================================================
+
+
+# Constants section - modify stuff here:
+#=================================================================================
+# Assign script name variable for use in event logging.
+# ScriptName should be the same as the ID of the module that the script is contained in
+$ScriptName = "Tangible.ProV.ProVService.Report.Script.Alert.Rule.Datasource.v10200.ps1"
+$EventID = "585"
+#=================================================================================
+
+
+# Starting Script section - All scripts get this
+#=================================================================================
+# Gather the start time of the script
+$StartTime = Get-Date
+#Set variable to be used in logging events
+$whoami = whoami
+# Load MOMScript API
+$momapi = New-Object -comObject MOM.ScriptAPI
+#Log script event that we are starting task
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Script is starting. `n Running as ($whoami).")
+#=================================================================================
+
+
+# PropertyBag Script section - Monitoring scripts get this
+#=================================================================================
+# Load SCOM PropertyBag function
+$bag = $momapi.CreatePropertyBag()
+#=================================================================================
+
+
+# Begin MAIN script section
+#=================================================================================
+
+#For a simple example - get files in Windows Temp:
+$date = get-date -uFormat "%Y-%m-%d"
+$Age = [DateTime](Get-Date).AddDays(-1)
+
+# Grab past 24 hours
+if ( (get-date).DayOfWeek -ne "Monday" )
+	{
+	$Time = [DateTime](Get-Date).AddDays(-1)
+	}
+if ( (get-date).DayOfWeek -eq "Monday" )
+	{
+	$Time = [DateTime](Get-Date).AddDays(-3)
+	}
+
+
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Gather Tangible ProVService Alerts for date ($date).")
+
+$DSMessage = "Proactive Tangible ProVService Alerts for date ($date)."
+
+#
+# Clean up old reports
+#===============================================
+$OpenAlerts = get-scomalert -ResolutionState (0..254) -Name "Tangible ProV ProVService Service*"
+
+$OpenAlerts = $OpenAlerts | ? { $_.TimeRaised -ge $Time }
+# $OpenAlerts.count
+
+# Closed alerts
+$ClosedAlerts = get-scomalert -ResolutionState 255 -Name "Tangible ProV ProVService Service*" | ? { $_.TimeRaised -ge $Time }
+# $ClosedAlerts.count
+
+# Alerts since past report
+$TotalProVAlerts = $OpenAlerts.count + $ClosedAlerts
+
+# Alert monitors
+$TotalProVMonitors = $OpenAlerts | where { ( $_.Name -like "Tangible ProV ProVService Service Monitor*" ) `
+	-OR ( $_.Name -like "Tangible ProV Application Repeated Event*" ) `
+	-OR ( $_.Name -like "Tangible ProV Application 4402 Repeat Event*" ) `
+	}
+# $TotalProVMonitors.Count
+
+
+# Total in history
+$TotalProVMonitorHistory = $OpenAlerts | ? { $_.TimeRaised -ge $Time }
+# $TotalProVMonitorHistory.Count
+
+
+#
+# List rules to close
+
+$TangibleProVRulesToClose = @()
+
+
+$TangibleProVRulesToClose = get-scomalert -ResolutionState (0..254) -Name "Tangible ProV ProVService Service*"
+# $TangibleProVRulesToClose.Count
+
+$TangibleProVRulesAutoClose = $TangibleProVRulesToClose | ? { $_.TimeRaised -gt $Time }
+# $TangibleProVRulesAutoClose.Count
+
+
+# Set up array for unhealthy agent report
+$TProVMessage = @()
+
+if ( $OpenAlerts.Count -eq 0 )
+	{
+	$TProVMessage += "ZERO Tangible ProVService alerts for date ($date)."
+	}
+
+if ( $OpenAlerts.Count -gt 0 )
+	{
+	$TProVMessage += ""
+	$TProVMessage += $DSMessage
+	$TProVMessage += ""
+	$TProVMessage += "# Open ProV alerts = $($OpenAlerts.Count)"
+	$TProVMessage += ""
+	$TProVMessage += "# Since last report run:"
+	$TProVMessage += "#-----------------------"
+	$TProVMessage += "# Total ProV alerts = $($TotalProVAlerts)"
+	$TProVMessage += "# Auto-closed monitors = $($TotalProVMonitorHistory.Count)"
+	$TProVMessage += "# Auto-closed rules = $($TangibleProVRulesAutoClose.Count)"
+	$TProVMessage += ""
+	$TProVMessage += "# Total automation closures:"
+	$TProVMessage += "#---------------------------"
+	$TProVMessage += "# Auto-closed monitors = $($TotalProVMonitors.Count)"
+	$TProVMessage += "# Auto-closed rules = $($TangibleProVRulesToClose.Count)"
+	$TProVMessage += ""
+	$TProVMessage += ""
+	$TProVMessage += "# Unhealthy Tangible ProV service alert details"
+	$TProVMessage += "#=============================================="
+	$TProVMessage += $OpenAlerts | ft NetBiosComputerName,TimeRaised,RepeatCount,Name -auto
+	$TProVMessage += "#=============================================="
+	$TProVMessage += ""
+	$TProVMessage += "# Closed Tangible ProV service alert details"
+	$TProVMessage += "#=============================================="
+	$TProVMessage += $ClosedAlerts | sort -property NetBiosComputerName | sort -property RepeatCount -desc | ft NetBiosComputerName,TimeRaised,RepeatCount,Name -auto
+	$TProVMessage += "#=============================================="
+	$TProVMessage += ""
+	}
+
+# $TProVMessage
+
+$TProVMessage = $TProVMessage | out-string
+
+$TProVMessage
+
+
+# Rule closure logic
+#=================================================================================
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Proactive Tangible ProV Application rule reset started for ($date)")
+
+
+if ( $TangibleProVRulesAutoClose.Count -gt 0 )
+	{
+	$TangibleProVRulesAutoClose | Set-SCOMAlert -ResolutionState 255 -Comment "Auto close per Proactive Tangible ProV Application datasource runs M-F"
+	}
+
+# Write event for rule closure
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Proactive Tangible ProV Application rule reset completed for ($date)")
+
+#=================================================================================
+
+
+#=================================================================================
+# Reset Monitors Script base code modified
+# Put ps1 in mgmtpacks folder
+# https://sc.scomurr.com/scom-2012-monitor-reset-cleaning-up-the-environment/
+#	Download
+# https://gallery.technet.microsoft.com/SCOM-2012-Batch-reset-63a17534
+
+#Alternate
+#https://gallery.technet.microsoft.com/scriptcenter/Auto-reset-script-for-d8b775ca
+
+# Changed up logic to sort unique classes in mgmnt pack families.
+# Added Age variable for monitors thanks to Aris Somatis - $Age specified in top level variables
+# Cycling through monitors made reset loop huge ~650 monitors when only ~50 classes
+# New logic reduced runtime from 8 minutes to roughly 8 seconds
+#=================================================================================
+
+# Write event for rule closure
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Proactive Tangible ProV Application Monitors reset started for ($date).")
+
+
+# Create Array for all the unhealthy monitors
+$TangibleProVMonitorsToAutoClose = @("Tangible ProV ProVService Service Monitor","Tangible ProV Application Repeated Event","Tangible ProV Application 4402 Repeat Event" )
+# $TangibleProVMonitorsToAutoClose
+
+if ( $OpenAlerts.Count -gt 0 )
+	{
+	foreach ($MonitorDisplayName in $TangibleProVMonitorsToAutoClose)
+		{
+		$Monitors = @(Get-SCOMMonitor -DisplayName $MonitorDisplayName)
+
+		# Set up monitor objects to reset
+		
+		foreach ($Monitor in $Monitors)
+			{
+			$MonitorClass = Get-SCOMClass -Id $Monitor.Target.Id
+			write-host ""
+			write-host "Monitor Class = " + $MonitorClass
+			$ActiveMonitors = Get-SCOMClassInstance -Class $MonitorClass | ? { ($_.healthstate -ne 'Success') -AND ( $_.healthstate -ne 'Uninitialized') -AND ($_.IsAvailable -eq $true) }
+			$UnhealthyMonitors += $ActiveMonitors.Count
+			
+			$ActiveMonitors.Count
+			# $ActiveMonitors | fl -property *
+			write-host "Found" $ActiveMonitors.Count "unhealthy monitors for class" $MonitorClass
+
+			foreach ( $UnhealthyOLDMonitor in $ActiveMonitors )
+				{
+				#if ( $UnhealthyOLDMonitor.AvailabilityLastModified -lt $Age )
+				if ( $UnhealthyOLDMonitor.StateLastModified -lt $Age )
+					{
+					#$UnhealthyMonitors += $ActiveMonitors.Count
+					#UnhealthyOLDMonitor | select AvailabilityLastModified,Path,DisplayName
+					#$UnhealthyOLDMonitor.Count
+					#write-host "Found" + $UnhealthyOLDMonitor.Count + "unhealthy monitor beyond" $Age "days."
+					#write-host ""
+					foreach ($ActiveMonitor in $ActiveMonitors)
+						{
+						write-host " Resetting Health State on '" +$ActiveMonitor.FullName + "'" 
+						$ActiveMonitor.ResetMonitoringState($Monitor.ID)
+						# Debug
+						$ActiveMonitor.ID
+						write-host " Resetting Health State on '" + $ActiveMonitor.FullName + "'" 
+						write-host ""
+						}
+					}
+				}
+			}
+		}
+	# Debug
+	#$MonitorClass | fl -property *
+	#$MonitorClass | select DisplayName,ID
+	}
+
+# Debug Write event for monitor closure
+#=================================================================================
+# Write event for rule closure
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Proactive Tangible ProV Application monitor reset completed for ($date)")
+
+
+#============================================================
+# Tally up all the property bags for datasource
+
+$Result = "GOOD"
+
+# Log
+$Summary = "$TProVMessage `n `nDisclaimer:  This daily summary report is to document the manual tasks used by NOSC to check AD and AD Replication health, Pending Reboot Report, Logical Disk errors,Expiring Certificates, Unhealthy Server/Agents, Unhealthy agent workflow/script alerts, and Servers in Maintenance Mode"
+
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"$TProVMessage`n `nDisclaimer:  This daily summary report is to document the manual tasks used by NOSC to check AD and AD Replication health, Pending Reboot Report, Logical Disk errors,Expiring Certificates, Unhealthy Server/Agents, Unhealthy agent workflow/script alerts, and Servers in Maintenance Mode")
+
+  $bag.AddValue('Message',$DSMessage)
+  $bag.AddValue('Summary',$Summary)
+
+
+# Return all bags
+$bag
+
+
+#=================================================================================
+# End MAIN script section
+
+
+# End of script section
+#=================================================================================
+#Log an event for script ending and total execution time.
+$EndTime = Get-Date
+$ScriptTime = ($EndTime - $StartTime).TotalSeconds
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Script Completed. Script Runtime: ($ScriptTime) seconds.")
+#=================================================================================
+# End of script
+                </ScriptBody>
+                <TimeoutSeconds>$Config/TimeoutSeconds$</TimeoutSeconds>
+              </WriteAction>
+            </MemberModules>
+            <Composition>
+              <Node ID="PSWA" />
+            </Composition>
+          </Composite>
+        </ModuleImplementation>
+        <OutputType>System!System.BaseData</OutputType>
+        <InputType>System!System.BaseData</InputType>
+      </WriteActionModuleType>
+    </ModuleTypes>
+    <MonitorTypes>
+      <UnitMonitorType ID="Tangible.ProV.ProVService.Monitor.MonitorType" Accessibility="Public">
+        <MonitorTypeStates>
+          <MonitorTypeState ID="Running" NoDetection="false" />
+          <MonitorTypeState ID="NotRunning" NoDetection="false" />
+        </MonitorTypeStates>
+        <Configuration>
+          <xsd:element name="ComputerName" type="xsd:string" xmlns:xsd="http://www.w3.org/2001/XMLSchema" />
+          <xsd:element name="ServiceName" type="xsd:string" xmlns:xsd="http://www.w3.org/2001/XMLSchema" />
+          <xsd:element name="IntervalSeconds" type="xsd:integer" xmlns:xsd="http://www.w3.org/2001/XMLSchema" />
+          <xsd:element name="CheckStartupType" minOccurs="0" maxOccurs="1" type="xsd:string" xmlns:xsd="http://www.w3.org/2001/XMLSchema" />
+          <xsd:element name="Samples" type="xsd:integer" xmlns:xsd="http://www.w3.org/2001/XMLSchema" />
+		  </Configuration>		
+        <OverrideableParameters>
+          <OverrideableParameter ID="IntervalSeconds" Selector="$Config/IntervalSeconds$" ParameterType="int" />
+          <OverrideableParameter ID="CheckStartupType" Selector="$Config/CheckStartupType$" ParameterType="string" />
+          <OverrideableParameter ID="Samples" Selector="$Config/Samples$" ParameterType="int" />
+        </OverrideableParameters>
+        <MonitorImplementation>
+          <MemberModules>
+            <DataSource ID="DS" TypeID="Windows!Microsoft.Windows.Win32ServiceInformationProvider">
+              <ComputerName>$Config/ComputerName$</ComputerName>
+              <ServiceName>$Config/ServiceName$</ServiceName>
+              <Frequency>$Config/IntervalSeconds$</Frequency>
+              <DisableCaching>true</DisableCaching>
+              <CheckStartupType>$Config/CheckStartupType$</CheckStartupType>
+			  </DataSource>
+            <ProbeAction ID="Probe" TypeID="Windows!Microsoft.Windows.Win32ServiceInformationProbe">
+              <ComputerName>$Config/ComputerName$</ComputerName>
+              <ServiceName>$Config/ServiceName$</ServiceName>
+            </ProbeAction>
+            <ConditionDetection ID="ServiceRunning" TypeID="System!System.ExpressionFilter">
+              <Expression>
+                <Or>
+                  <Expression>
+                    <SimpleExpression>
+                      <ValueExpression>
+                        <XPathQuery Type="Integer">Property[@Name='StartMode']</XPathQuery>
+                      </ValueExpression>
+                      <Operator>Equal</Operator>
+                      <ValueExpression>
+                        <Value Type="Integer">4</Value> <!-- 0=BootStart 1=SystemStart 2=Automatic 3=Manual 4=Disabled -->
+                      </ValueExpression>
+                    </SimpleExpression>
+                  </Expression>
+                  <Expression>
+                    <SimpleExpression>
+                      <ValueExpression>
+                        <XPathQuery Type="Integer">Property[@Name='State']</XPathQuery>
+                      </ValueExpression>
+                      <Operator>Equal</Operator>
+                      <ValueExpression>
+                        <Value Type="Integer">4</Value> <!-- 0=Unknown 1=Stopped 2=StartPending 3=StopPending 4=Running 5=ContinuePending 6=PausePending 7=Paused 8=ServiceNotFound 9=ServerNotFound -->
+                      </ValueExpression>
+                    </SimpleExpression>
+                  </Expression>
+                </Or>
+              </Expression>
+            </ConditionDetection>
+            <ConditionDetection ID="ServiceNotRunning" TypeID="System!System.ExpressionFilter">
+              <Expression>
+                <And>
+                  <Expression>
+                    <SimpleExpression>
+                      <ValueExpression>
+                        <XPathQuery Type="Integer">Property[@Name='StartMode']</XPathQuery>
+                      </ValueExpression>
+                      <Operator>NotEqual</Operator>
+                      <ValueExpression>
+                        <Value Type="Integer">4</Value> <!-- 0=BootStart 1=SystemStart 2=Automatic 3=Manual 4=Disabled -->
+                      </ValueExpression>
+                    </SimpleExpression>
+                  </Expression>
+                  <Expression>
+                    <SimpleExpression>
+                      <ValueExpression>
+                        <XPathQuery Type="Integer">Property[@Name='State']</XPathQuery>
+                      </ValueExpression>
+                      <Operator>NotEqual</Operator>
+                      <ValueExpression>
+                        <Value Type="Integer">4</Value> <!-- 0=Unknown 1=Stopped 2=StartPending 3=StopPending 4=Running 5=ContinuePending 6=PausePending 7=Paused 8=ServiceNotFound 9=ServerNotFound -->
+                      </ValueExpression>
+                    </SimpleExpression>
+                  </Expression>
+                </And>
+              </Expression>
+              <SuppressionSettings>
+                <MatchCount>$Config/Samples$</MatchCount>
+              </SuppressionSettings>			  
+            </ConditionDetection>
+          </MemberModules>
+          <RegularDetections>
+            <RegularDetection MonitorTypeStateID="Running">
+              <Node ID="ServiceRunning">
+                <Node ID="DS" />
+              </Node>
+            </RegularDetection>
+            <RegularDetection MonitorTypeStateID="NotRunning">
+              <Node ID="ServiceNotRunning">
+                <Node ID="DS" />
+              </Node>
+            </RegularDetection>
+          </RegularDetections>
+          <OnDemandDetections>
+            <OnDemandDetection MonitorTypeStateID="Running">
+              <Node ID="ServiceRunning">
+                <Node ID="Probe" />
+              </Node>
+            </OnDemandDetection>
+            <OnDemandDetection MonitorTypeStateID="NotRunning">
+              <Node ID="ServiceNotRunning">
+                <Node ID="Probe" />
+              </Node>
+            </OnDemandDetection>
+          </OnDemandDetections>
+        </MonitorImplementation>
+      </UnitMonitorType>
+      <UnitMonitorType ID="Tangible.ProV.MonitorType.TimerResetEvent.Repeated" Accessibility="Public">
+        <MonitorTypeStates>
+          <MonitorTypeState ID="RepeatedEventRaised" NoDetection="false" />
+          <MonitorTypeState ID="TimerEventRaised" NoDetection="false" />
+        </MonitorTypeStates>
+        <Configuration>
+          <IncludeSchemaTypes>
+            <SchemaType>System!System.ExpressionEvaluatorSchema</SchemaType>
+          </IncludeSchemaTypes>
+          <xsd:element name="ComputerName" type="xsd:string" xmlns:xsd="http://www.w3.org/2001/XMLSchema" />
+          <xsd:element name="LogName" type="xsd:string" xmlns:xsd="http://www.w3.org/2001/XMLSchema" />
+          <xsd:element name="ErrorExpression" type="ExpressionType" xmlns:xsd="http://www.w3.org/2001/XMLSchema" />
+          <xsd:element name="AutoResolveInterval" type="xsd:unsignedInt" xmlns:xsd="http://www.w3.org/2001/XMLSchema" />
+          <xsd:element name="TimerWindowInSeconds" type="xsd:unsignedInt" xmlns:xsd="http://www.w3.org/2001/XMLSchema" />
+          <xsd:element name="RepeatCount" type="xsd:unsignedInt" xmlns:xsd="http://www.w3.org/2001/XMLSchema" />
+        </Configuration>
+        <MonitorImplementation>
+          <MemberModules>
+            <DataSource ID="ErrorDataSource" TypeID="Windows!Microsoft.Windows.BaseEventProvider">
+              <ComputerName>$Config/ComputerName$</ComputerName>
+              <LogName>$Config/LogName$</LogName>
+            </DataSource>
+            <ProbeAction ID="OnDemandReset" TypeID="System!System.PassThroughProbe" />
+            <ConditionDetection ID="ErrorFilterCondition" TypeID="System!System.ExpressionFilter">
+              <Expression>$Config/ErrorExpression$</Expression>
+            </ConditionDetection>
+            <ConditionDetection ID="RepeatedDataCondition" TypeID="System!System.ConsolidatorCondition">
+              <Consolidator>
+                <ConsolidationProperties />
+                <TimeControl>
+                  <WithinTimeSchedule>
+                    <Interval>$Config/TimerWindowInSeconds$</Interval>
+                  </WithinTimeSchedule>
+                </TimeControl>
+                <CountingCondition>
+                  <Count>$Config/RepeatCount$</Count>
+                  <CountMode>OnNewItemTestOutputRestart_OnTimerSlideByOne</CountMode>
+                </CountingCondition>
+              </Consolidator>
+            </ConditionDetection>
+            <ConditionDetection ID="TimerCondition" TypeID="System!System.TimerCondition">
+              <TimerWaitInSeconds>$Config/AutoResolveInterval$</TimerWaitInSeconds>
+            </ConditionDetection>
+          </MemberModules>
+          <RegularDetections>
+            <RegularDetection MonitorTypeStateID="RepeatedEventRaised">
+              <Node ID="RepeatedDataCondition">
+                <Node ID="ErrorFilterCondition">
+                  <Node ID="ErrorDataSource" />
+                </Node>
+              </Node>
+            </RegularDetection>
+            <RegularDetection MonitorTypeStateID="TimerEventRaised">
+              <Node ID="TimerCondition">
+                <Node ID="RepeatedDataCondition">
+                  <Node ID="ErrorFilterCondition">
+                    <Node ID="ErrorDataSource" />
+                  </Node>
+                </Node>
+              </Node>
+            </RegularDetection>
+          </RegularDetections>
+          <OnDemandDetections>
+            <OnDemandDetection MonitorTypeStateID="TimerEventRaised">
+              <Node ID="OnDemandReset" />
+            </OnDemandDetection>
+          </OnDemandDetections>
+        </MonitorImplementation>
+      </UnitMonitorType>
+    </MonitorTypes>
+  </TypeDefinitions>
+  <Monitoring>
+    <Discoveries>
+      <Discovery ID="Tangible.ProV.Seed.Class.Discovery" Target="Windows!Microsoft.Windows.Server.OperatingSystem" Enabled="true" ConfirmDelivery="false" Remotable="true" Priority="Normal">
+        <Category>Discovery</Category>
+        <DiscoveryTypes>
+          <DiscoveryClass TypeID="Tangible.ProV.Seed.Class">
+            <Property TypeID="System!System.Entity" PropertyID="DisplayName" />
+          </DiscoveryClass>
+        </DiscoveryTypes>
+        <DataSource ID="DSDiscovery.Seed" TypeID="Windows!Microsoft.Windows.FilteredRegistryDiscoveryProvider">
+          <ComputerName>$Target/Host/Property[Type="Windows!Microsoft.Windows.Computer"]/NetworkName$</ComputerName>
+          <RegistryAttributeDefinitions>
+            <RegistryAttributeDefinition>
+              <AttributeName>Search</AttributeName>
+              <Path>SOFTWARE\Tangible\ProV</Path>
+              <PathType>0</PathType>
+              <AttributeType>0</AttributeType>
+            </RegistryAttributeDefinition>
+          </RegistryAttributeDefinitions>
+          <Frequency>86400</Frequency>
+          <ClassId>$MPElement[Name="Tangible.ProV.Seed.Class"]$</ClassId>
+          <InstanceSettings>
+            <Settings>
+              <Setting>
+                <Name>$MPElement[Name="Windows!Microsoft.Windows.Computer"]/PrincipalName$</Name>
+                <Value>$Target/Host/Property[Type="Windows!Microsoft.Windows.Computer"]/PrincipalName$</Value>
+              </Setting>
+              <Setting>
+                <Name>$MPElement[Name="System!System.Entity"]/DisplayName$</Name>
+                <Value>$Target/Host/Property[Type="Windows!Microsoft.Windows.Computer"]/PrincipalName$</Value>
+              </Setting>
+            </Settings>
+          </InstanceSettings>
+          <Expression>
+            <SimpleExpression>
+              <ValueExpression>
+                <XPathQuery Type="String">Values/Search</XPathQuery>
+              </ValueExpression>
+              <Operator>Equal</Operator>
+              <ValueExpression>
+                <Value Type="String">True</Value>
+              </ValueExpression>
+            </SimpleExpression>
+          </Expression>
+        </DataSource>
+      </Discovery>
+    </Discoveries>
+    <Rules>
+      <Rule ID="Tangible.ProV.ProVService.Event2802.CouldNotValidateProductKey.Alert.Rule" Enabled="true" Target="Tangible.ProV.Seed.Class" ConfirmDelivery="true" Remotable="true" Priority="Normal" DiscardLevel="100">
+        <Category>Alert</Category>
+        <DataSources>
+          <DataSource ID="DS" TypeID="Windows!Microsoft.Windows.EventProvider">
+            <LogName>Tangible ProV</LogName>
+            <Expression>
+              <And>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="UnsignedInteger">EventDisplayNumber</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="UnsignedInteger">2802</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">PublisherName</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="String">ProVService</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+                <Expression>
+                  <RegExExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">EventDescription</XPathQuery>
+                    </ValueExpression>
+                    <Operator>ContainsSubstring</Operator>
+                    <Pattern>Could not validate product key</Pattern>
+                  </RegExExpression>
+                </Expression>
+              </And>
+            </Expression>
+          </DataSource>
+        </DataSources>
+        <WriteActions>
+          <WriteAction ID="Alert" TypeID="Health!System.Health.GenerateAlert">
+            <Priority>1</Priority>
+            <Severity>0</Severity>
+            <AlertName />
+            <AlertDescription />
+            <AlertOwner />
+            <AlertMessageId>$MPElement[Name="Tangible.ProV.ProVService.Event2802.CouldNotValidateProductKey.Alert.Rule.AlertMessage"]$</AlertMessageId>
+            <AlertParameters>
+              <AlertParameter1>$Data/EventDescription$</AlertParameter1>
+            </AlertParameters>
+            <Suppression />
+          </WriteAction>
+        </WriteActions>
+      </Rule>
+
+	  <Rule ID="Tangible.ProV.ProVService.Service.ServiceNotFound.Recovery.Rule" Enabled="true" Target="Tangible.ProV.Seed.Class" ConfirmDelivery="true" Remotable="true" Priority="Normal" DiscardLevel="100">
+        <Category>Alert</Category>
+        <DataSources>
+          <DataSource ID="DS" TypeID="Windows!Microsoft.Windows.EventProvider">
+            <ComputerName>$Target/Host/Property[Type="Windows!Microsoft.Windows.Computer"]/NetworkName$</ComputerName>
+            <LogName>Operations Manager</LogName>
+            <Expression>
+              <And>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="UnsignedInteger">EventDisplayNumber</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="UnsignedInteger">3751</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">PublisherName</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="String">Health Service Script</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+				<Expression>
+                  <RegExExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">Params/Param[2]</XPathQuery>
+                    </ValueExpression>
+                    <Operator>ContainsSubstring</Operator>
+                    <Pattern>ProVService</Pattern>
+                  </RegExExpression>
+                </Expression>
+              </And>
+            </Expression>
+          </DataSource>
+        </DataSources>
+        <WriteActions>
+          <WriteAction ID="Alert" TypeID="Health!System.Health.GenerateAlert">
+            <Priority>1</Priority>  <!-- 0=Low 1=Medium 2=High -->
+            <Severity>0</Severity>  <!-- 0=Information 1=Warning 2=Critical -->
+            <AlertName />
+            <AlertDescription />
+            <AlertOwner />
+            <AlertMessageId>$MPElement[Name="Tangible.ProV.ProVService.Service.ServiceNotFound.Recovery.Rule.AlertMessage"]$</AlertMessageId>
+            <AlertParameters>
+              <AlertParameter1>$Data/EventDescription$</AlertParameter1>
+            </AlertParameters>
+            <Suppression>
+              <SuppressionValue>$Data[Default='']/EventDisplayNumber$</SuppressionValue>
+              <SuppressionValue>$Data[Default='']/PublisherName$</SuppressionValue>
+              <SuppressionValue>$Data[Default='']/LoggingComputer$</SuppressionValue>
+            </Suppression>
+            <Custom1 />
+            <Custom2 />
+            <Custom3 />
+            <Custom4 />
+            <Custom5 />
+            <Custom6 />
+            <Custom7 />
+            <Custom8 />
+            <Custom9 />
+            <Custom10 />
+          </WriteAction>
+        </WriteActions>
+      </Rule>
+      <Rule ID="Tangible.ProV.ProVService.Service.ServiceFoundRunning.Recovery.Rule" Enabled="false" Target="Tangible.ProV.Seed.Class" ConfirmDelivery="true" Remotable="true" Priority="Normal" DiscardLevel="100">
+        <Category>Alert</Category>
+        <DataSources>
+          <DataSource ID="DS" TypeID="Windows!Microsoft.Windows.EventProvider">
+            <ComputerName>$Target/Host/Property[Type="Windows!Microsoft.Windows.Computer"]/NetworkName$</ComputerName>
+            <LogName>Operations Manager</LogName>
+            <Expression>
+              <And>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="UnsignedInteger">EventDisplayNumber</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="UnsignedInteger">3752</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">PublisherName</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="String">Health Service Script</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+				<Expression>
+                  <RegExExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">Params/Param[2]</XPathQuery>
+                    </ValueExpression>
+                    <Operator>ContainsSubstring</Operator>
+                    <Pattern>ProVService</Pattern>
+                  </RegExExpression>
+                </Expression>
+              </And>
+            </Expression>
+          </DataSource>
+        </DataSources>
+        <WriteActions>
+          <WriteAction ID="Alert" TypeID="Health!System.Health.GenerateAlert">
+            <Priority>1</Priority>  <!-- 0=Low 1=Medium 2=High -->
+            <Severity>0</Severity>  <!-- 0=Information 1=Warning 2=Critical -->
+            <AlertName />
+            <AlertDescription />
+            <AlertOwner />
+            <AlertMessageId>$MPElement[Name="Tangible.ProV.ProVService.Service.ServiceFoundRunning.Recovery.Rule.AlertMessage"]$</AlertMessageId>
+            <AlertParameters>
+              <AlertParameter1>$Data/EventDescription$</AlertParameter1>
+            </AlertParameters>
+            <Suppression>
+              <SuppressionValue>$Data[Default='']/EventDisplayNumber$</SuppressionValue>
+              <SuppressionValue>$Data[Default='']/PublisherName$</SuppressionValue>
+              <SuppressionValue>$Data[Default='']/LoggingComputer$</SuppressionValue>
+            </Suppression>
+            <Custom1 />
+            <Custom2 />
+            <Custom3 />
+            <Custom4 />
+            <Custom5 />
+            <Custom6 />
+            <Custom7 />
+            <Custom8 />
+            <Custom9 />
+            <Custom10 />
+          </WriteAction>
+        </WriteActions>
+      </Rule>
+	  <Rule ID="Tangible.ProV.ProVService.Service.ServiceRecoveryFailed.Recovery.Rule" Enabled="false" Target="Tangible.ProV.Seed.Class" ConfirmDelivery="true" Remotable="true" Priority="Normal" DiscardLevel="100">
+        <Category>Alert</Category>
+        <DataSources>
+          <DataSource ID="DS" TypeID="Windows!Microsoft.Windows.EventProvider">
+            <ComputerName>$Target/Host/Property[Type="Windows!Microsoft.Windows.Computer"]/NetworkName$</ComputerName>
+            <LogName>Operations Manager</LogName>
+            <Expression>
+              <And>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="UnsignedInteger">EventDisplayNumber</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="UnsignedInteger">3753</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">PublisherName</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="String">Health Service Script</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+				<Expression>
+                  <RegExExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">Params/Param[2]</XPathQuery>
+                    </ValueExpression>
+                    <Operator>ContainsSubstring</Operator>
+                    <Pattern>ProVService</Pattern>
+                  </RegExExpression>
+                </Expression>
+              </And>
+            </Expression>
+          </DataSource>
+        </DataSources>
+        <WriteActions>
+          <WriteAction ID="Alert" TypeID="Health!System.Health.GenerateAlert">
+            <Priority>1</Priority>  <!-- 0=Low 1=Medium 2=High -->
+            <Severity>1</Severity>  <!-- 0=Information 1=Warning 2=Critical -->
+            <AlertName />
+            <AlertDescription />
+            <AlertOwner />
+            <AlertMessageId>$MPElement[Name="Tangible.ProV.ProVService.Service.ServiceRecoveryFailed.Recovery.Rule.AlertMessage"]$</AlertMessageId>
+            <AlertParameters>
+              <AlertParameter1>$Data/EventDescription$</AlertParameter1>
+            </AlertParameters>
+            <Suppression>
+              <SuppressionValue>$Data[Default='']/EventDisplayNumber$</SuppressionValue>
+              <SuppressionValue>$Data[Default='']/PublisherName$</SuppressionValue>
+              <SuppressionValue>$Data[Default='']/LoggingComputer$</SuppressionValue>
+            </Suppression>
+            <Custom1 />
+            <Custom2 />
+            <Custom3 />
+            <Custom4 />
+            <Custom5 />
+            <Custom6 />
+            <Custom7 />
+            <Custom8 />
+            <Custom9 />
+            <Custom10 />
+          </WriteAction>
+        </WriteActions>
+      </Rule>
+	  <Rule ID="Tangible.ProV.ProVService.Service.TooManyRecoveryAttempts.Recovery.Rule" Enabled="true" Target="Tangible.ProV.Seed.Class" ConfirmDelivery="true" Remotable="true" Priority="Normal" DiscardLevel="100">
+        <Category>Alert</Category>
+        <DataSources>
+          <DataSource ID="DS" TypeID="Windows!Microsoft.Windows.EventProvider">
+            <ComputerName>$Target/Host/Property[Type="Windows!Microsoft.Windows.Computer"]/NetworkName$</ComputerName>
+            <LogName>Operations Manager</LogName>
+            <Expression>
+              <And>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="UnsignedInteger">EventDisplayNumber</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="UnsignedInteger">3754</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">PublisherName</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="String">Health Service Script</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+				<Expression>
+                  <RegExExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">Params/Param[2]</XPathQuery>
+                    </ValueExpression>
+                    <Operator>ContainsSubstring</Operator>
+                    <Pattern>ProVService</Pattern>
+                  </RegExExpression>
+                </Expression>
+              </And>
+            </Expression>
+          </DataSource>
+        </DataSources>
+        <WriteActions>
+          <WriteAction ID="Alert" TypeID="Health!System.Health.GenerateAlert">
+            <Priority>1</Priority>  <!-- 0=Low 1=Medium 2=High -->
+            <Severity>0</Severity>  <!-- 0=Information 1=Warning 2=Critical -->
+            <AlertName />
+            <AlertDescription />
+            <AlertOwner />
+            <AlertMessageId>$MPElement[Name="Tangible.ProV.ProVService.Service.TooManyRecoveryAttempts.Recovery.Rule.AlertMessage"]$</AlertMessageId>
+            <AlertParameters>
+              <AlertParameter1>$Data/EventDescription$</AlertParameter1>
+            </AlertParameters>
+            <Suppression>
+              <SuppressionValue>$Data[Default='']/EventDisplayNumber$</SuppressionValue>
+              <SuppressionValue>$Data[Default='']/PublisherName$</SuppressionValue>
+              <SuppressionValue>$Data[Default='']/LoggingComputer$</SuppressionValue>
+            </Suppression>
+            <Custom1 />
+            <Custom2 />
+            <Custom3 />
+            <Custom4 />
+            <Custom5 />
+            <Custom6 />
+            <Custom7 />
+            <Custom8 />
+            <Custom9 />
+            <Custom10 />
+          </WriteAction>
+        </WriteActions>
+      </Rule>
+
+	  <Rule ID="Tangible.ProV.ProVService.Event4402.Service.ServiceNotFound.Recovery.Rule" Enabled="true" Target="Tangible.ProV.Seed.Class" ConfirmDelivery="true" Remotable="true" Priority="Normal" DiscardLevel="100">
+        <Category>Alert</Category>
+        <DataSources>
+          <DataSource ID="DS" TypeID="Windows!Microsoft.Windows.EventProvider">
+            <ComputerName>$Target/Host/Property[Type="Windows!Microsoft.Windows.Computer"]/NetworkName$</ComputerName>
+            <LogName>Operations Manager</LogName>
+            <Expression>
+              <And>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="UnsignedInteger">EventDisplayNumber</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="UnsignedInteger">3756</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">PublisherName</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="String">Health Service Script</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+				<Expression>
+                  <RegExExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">Params/Param[2]</XPathQuery>
+                    </ValueExpression>
+                    <Operator>ContainsSubstring</Operator>
+                    <Pattern>ProVService</Pattern>
+                  </RegExExpression>
+                </Expression>
+              </And>
+            </Expression>
+          </DataSource>
+        </DataSources>
+        <WriteActions>
+          <WriteAction ID="Alert" TypeID="Health!System.Health.GenerateAlert">
+            <Priority>1</Priority>  <!-- 0=Low 1=Medium 2=High -->
+            <Severity>0</Severity>  <!-- 0=Information 1=Warning 2=Critical -->
+            <AlertName />
+            <AlertDescription />
+            <AlertOwner />
+            <AlertMessageId>$MPElement[Name="Tangible.ProV.ProVService.Event4402.Service.ServiceNotFound.Recovery.Rule.AlertMessage"]$</AlertMessageId>
+            <AlertParameters>
+              <AlertParameter1>$Data/EventDescription$</AlertParameter1>
+            </AlertParameters>
+            <Suppression>
+              <SuppressionValue>$Data[Default='']/EventDisplayNumber$</SuppressionValue>
+              <SuppressionValue>$Data[Default='']/PublisherName$</SuppressionValue>
+              <SuppressionValue>$Data[Default='']/LoggingComputer$</SuppressionValue>
+            </Suppression>
+            <Custom1 />
+            <Custom2 />
+            <Custom3 />
+            <Custom4 />
+            <Custom5 />
+            <Custom6 />
+            <Custom7 />
+            <Custom8 />
+            <Custom9 />
+            <Custom10 />
+          </WriteAction>
+        </WriteActions>
+      </Rule>
+      <Rule ID="Tangible.ProV.ProVService.Event4402.Service.ServiceFoundRunning.Recovery.Rule" Enabled="true" Target="Tangible.ProV.Seed.Class" ConfirmDelivery="true" Remotable="true" Priority="Normal" DiscardLevel="100">
+        <Category>Alert</Category>
+        <DataSources>
+          <DataSource ID="DS" TypeID="Windows!Microsoft.Windows.EventProvider">
+            <ComputerName>$Target/Host/Property[Type="Windows!Microsoft.Windows.Computer"]/NetworkName$</ComputerName>
+            <LogName>Operations Manager</LogName>
+            <Expression>
+              <And>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="UnsignedInteger">EventDisplayNumber</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="UnsignedInteger">3757</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">PublisherName</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="String">Health Service Script</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+				<Expression>
+                  <RegExExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">Params/Param[2]</XPathQuery>
+                    </ValueExpression>
+                    <Operator>ContainsSubstring</Operator>
+                    <Pattern>ProVService</Pattern>
+                  </RegExExpression>
+                </Expression>
+              </And>
+            </Expression>
+          </DataSource>
+        </DataSources>
+        <WriteActions>
+          <WriteAction ID="Alert" TypeID="Health!System.Health.GenerateAlert">
+            <Priority>1</Priority>  <!-- 0=Low 1=Medium 2=High -->
+            <Severity>0</Severity>  <!-- 0=Information 1=Warning 2=Critical -->
+            <AlertName />
+            <AlertDescription />
+            <AlertOwner />
+            <AlertMessageId>$MPElement[Name="Tangible.ProV.ProVService.Event4402.Service.ServiceFoundRunning.Recovery.Rule.AlertMessage"]$</AlertMessageId>
+            <AlertParameters>
+              <AlertParameter1>$Data/EventDescription$</AlertParameter1>
+            </AlertParameters>
+            <Suppression>
+              <SuppressionValue>$Data[Default='']/EventDisplayNumber$</SuppressionValue>
+              <SuppressionValue>$Data[Default='']/PublisherName$</SuppressionValue>
+              <SuppressionValue>$Data[Default='']/LoggingComputer$</SuppressionValue>
+            </Suppression>
+            <Custom1 />
+            <Custom2 />
+            <Custom3 />
+            <Custom4 />
+            <Custom5 />
+            <Custom6 />
+            <Custom7 />
+            <Custom8 />
+            <Custom9 />
+            <Custom10 />
+          </WriteAction>
+        </WriteActions>
+      </Rule>
+	  <Rule ID="Tangible.ProV.ProVService.Event4402.Service.ServiceRecoveryFailed.Recovery.Rule" Enabled="true" Target="Tangible.ProV.Seed.Class" ConfirmDelivery="true" Remotable="true" Priority="Normal" DiscardLevel="100">
+        <Category>Alert</Category>
+        <DataSources>
+          <DataSource ID="DS" TypeID="Windows!Microsoft.Windows.EventProvider">
+            <ComputerName>$Target/Host/Property[Type="Windows!Microsoft.Windows.Computer"]/NetworkName$</ComputerName>
+            <LogName>Operations Manager</LogName>
+            <Expression>
+              <And>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="UnsignedInteger">EventDisplayNumber</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="UnsignedInteger">3758</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">PublisherName</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="String">Health Service Script</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+				<Expression>
+                  <RegExExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">Params/Param[2]</XPathQuery>
+                    </ValueExpression>
+                    <Operator>ContainsSubstring</Operator>
+                    <Pattern>ProVService</Pattern>
+                  </RegExExpression>
+                </Expression>
+              </And>
+            </Expression>
+          </DataSource>
+        </DataSources>
+        <WriteActions>
+          <WriteAction ID="Alert" TypeID="Health!System.Health.GenerateAlert">
+            <Priority>1</Priority>  <!-- 0=Low 1=Medium 2=High -->
+            <Severity>1</Severity>  <!-- 0=Information 1=Warning 2=Critical -->
+            <AlertName />
+            <AlertDescription />
+            <AlertOwner />
+            <AlertMessageId>$MPElement[Name="Tangible.ProV.ProVService.Event4402.Service.ServiceRecoveryFailed.Recovery.Rule.AlertMessage"]$</AlertMessageId>
+            <AlertParameters>
+              <AlertParameter1>$Data/EventDescription$</AlertParameter1>
+            </AlertParameters>
+            <Suppression>
+              <SuppressionValue>$Data[Default='']/EventDisplayNumber$</SuppressionValue>
+              <SuppressionValue>$Data[Default='']/PublisherName$</SuppressionValue>
+              <SuppressionValue>$Data[Default='']/LoggingComputer$</SuppressionValue>
+            </Suppression>
+            <Custom1 />
+            <Custom2 />
+            <Custom3 />
+            <Custom4 />
+            <Custom5 />
+            <Custom6 />
+            <Custom7 />
+            <Custom8 />
+            <Custom9 />
+            <Custom10 />
+          </WriteAction>
+        </WriteActions>
+      </Rule>
+	  <Rule ID="Tangible.ProV.ProVService.Event4402.Service.TooManyRecoveryAttempts.Recovery.Rule" Enabled="true" Target="Tangible.ProV.Seed.Class" ConfirmDelivery="true" Remotable="true" Priority="Normal" DiscardLevel="100">
+        <Category>Alert</Category>
+        <DataSources>
+          <DataSource ID="DS" TypeID="Windows!Microsoft.Windows.EventProvider">
+            <ComputerName>$Target/Host/Property[Type="Windows!Microsoft.Windows.Computer"]/NetworkName$</ComputerName>
+            <LogName>Operations Manager</LogName>
+            <Expression>
+              <And>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="UnsignedInteger">EventDisplayNumber</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="UnsignedInteger">3759</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">PublisherName</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="String">Health Service Script</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+				<Expression>
+                  <RegExExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">Params/Param[2]</XPathQuery>
+                    </ValueExpression>
+                    <Operator>ContainsSubstring</Operator>
+                    <Pattern>ProVService</Pattern>
+                  </RegExExpression>
+                </Expression>
+              </And>
+            </Expression>
+          </DataSource>
+        </DataSources>
+        <WriteActions>
+          <WriteAction ID="Alert" TypeID="Health!System.Health.GenerateAlert">
+            <Priority>1</Priority>  <!-- 0=Low 1=Medium 2=High -->
+            <Severity>0</Severity>  <!-- 0=Information 1=Warning 2=Critical -->
+            <AlertName />
+            <AlertDescription />
+            <AlertOwner />
+            <AlertMessageId>$MPElement[Name="Tangible.ProV.ProVService.Event4402.Service.TooManyRecoveryAttempts.Recovery.Rule.AlertMessage"]$</AlertMessageId>
+            <AlertParameters>
+              <AlertParameter1>$Data/EventDescription$</AlertParameter1>
+            </AlertParameters>
+            <Suppression>
+              <SuppressionValue>$Data[Default='']/EventDisplayNumber$</SuppressionValue>
+              <SuppressionValue>$Data[Default='']/PublisherName$</SuppressionValue>
+              <SuppressionValue>$Data[Default='']/LoggingComputer$</SuppressionValue>
+            </Suppression>
+            <Custom1 />
+            <Custom2 />
+            <Custom3 />
+            <Custom4 />
+            <Custom5 />
+            <Custom6 />
+            <Custom7 />
+            <Custom8 />
+            <Custom9 />
+            <Custom10 />
+          </WriteAction>
+        </WriteActions>
+      </Rule>
+	  <Rule ID="Tangible.ProV.ProVService.Event4402.Service.RebootRequired.Recovery.Rule" Enabled="true" Target="Tangible.ProV.Seed.Class" ConfirmDelivery="true" Remotable="true" Priority="Normal" DiscardLevel="100">
+        <Category>Alert</Category>
+        <DataSources>
+          <DataSource ID="DS" TypeID="Windows!Microsoft.Windows.EventProvider">
+            <ComputerName>$Target/Host/Property[Type="Windows!Microsoft.Windows.Computer"]/NetworkName$</ComputerName>
+            <LogName>Operations Manager</LogName>
+            <Expression>
+              <And>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="UnsignedInteger">EventDisplayNumber</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="UnsignedInteger">3755</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">PublisherName</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="String">Health Service Script</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+				<Expression>
+                  <RegExExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">Params/Param[2]</XPathQuery>
+                    </ValueExpression>
+                    <Operator>ContainsSubstring</Operator>
+                    <Pattern>Reboot OR application reinstall required</Pattern>
+                  </RegExExpression>
+                </Expression>
+              </And>
+            </Expression>
+          </DataSource>
+        </DataSources>
+        <WriteActions>
+          <WriteAction ID="Alert" TypeID="Health!System.Health.GenerateAlert">
+            <Priority>1</Priority>  <!-- 0=Low 1=Medium 2=High -->
+            <Severity>0</Severity>  <!-- 0=Information 1=Warning 2=Critical -->
+            <AlertName />
+            <AlertDescription />
+            <AlertOwner />
+            <AlertMessageId>$MPElement[Name="Tangible.ProV.ProVService.Event4402.Service.RebootRequired.Rule.AlertMessage"]$</AlertMessageId>
+            <AlertParameters>
+              <AlertParameter1>$Data/EventDescription$</AlertParameter1>
+            </AlertParameters>
+            <Suppression>
+              <SuppressionValue>$Data[Default='']/EventDisplayNumber$</SuppressionValue>
+              <SuppressionValue>$Data[Default='']/PublisherName$</SuppressionValue>
+              <SuppressionValue>$Data[Default='']/LoggingComputer$</SuppressionValue>
+            </Suppression>
+            <Custom1 />
+            <Custom2 />
+            <Custom3 />
+            <Custom4 />
+            <Custom5 />
+            <Custom6 />
+            <Custom7 />
+            <Custom8 />
+            <Custom9 />
+            <Custom10 />
+          </WriteAction>
+        </WriteActions>
+      </Rule>
+
+      <Rule ID="Tangible.ProV.ProVService.Report.Script.Alert.Rule" Enabled="true" Target="SC!Microsoft.SystemCenter.AllManagementServersPool" ConfirmDelivery="true" Remotable="true" Priority="Normal" DiscardLevel="100">
+        <Category>Alert</Category>
+        <DataSources>
+          <DataSource ID="DS" TypeID="Tangible.ProV.ProVService.Report.Script.Alert.Rule.Datasource">
+            <TimeoutSeconds>300</TimeoutSeconds>
+          </DataSource>
+        </DataSources>
+        <WriteActions>
+          <WriteAction ID="WA" TypeID="Health!System.Health.GenerateAlert">
+            <Priority>1</Priority>
+            <Severity>0</Severity>
+            <AlertMessageId>$MPElement[Name="Tangible.ProV.ProVService.Report.Script.Alert.Rule.AlertMessage"]$</AlertMessageId>
+            <AlertParameters>
+              <AlertParameter1>$Data/Property[@Name='Message']$</AlertParameter1>
+              <AlertParameter2>$Data/Property[@Name='Summary']$</AlertParameter2>
+            </AlertParameters>
+            <Suppression>
+              <SuppressionValue>$Data/Property[@Name='Message']$</SuppressionValue>
+            </Suppression>
+          </WriteAction>
+        </WriteActions>
+      </Rule>
+      <Rule ID="Tangible.ProV.ProVService.Report.Script.Task.Alert.Rule" Enabled="true" Target="SC!Microsoft.SystemCenter.AllManagementServersPool" ConfirmDelivery="true" Remotable="true" Priority="Normal" DiscardLevel="100">
+        <Category>Alert</Category>
+        <DataSources>
+          <DataSource ID="DS" TypeID="Windows!Microsoft.Windows.EventProvider">
+            <LogName>Operations Manager</LogName>
+            <Expression>
+              <And>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="UnsignedInteger">EventDisplayNumber</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="UnsignedInteger">585</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">PublisherName</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="String">Health Service Script</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+                <Expression>
+                  <RegExExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">EventDescription</XPathQuery>
+                    </ValueExpression>
+                    <Operator>ContainsSubstring</Operator>
+                    <Pattern>Proactive Tangible ProVService Alerts for date</Pattern>
+                  </RegExExpression>
+                </Expression>
+              </And>
+            </Expression>
+          </DataSource>
+        </DataSources>
+        <WriteActions>
+          <WriteAction ID="Alert" TypeID="Health!System.Health.GenerateAlert">
+            <Priority>1</Priority>
+            <Severity>0</Severity>
+            <AlertName />
+            <AlertDescription />
+            <AlertOwner />
+            <AlertMessageId>$MPElement[Name="Tangible.ProV.ProVService.Report.Script.Task.Alert.Rule.AlertMessage"]$</AlertMessageId>
+            <AlertParameters>
+              <AlertParameter1>$Data/EventDescription$</AlertParameter1>
+            </AlertParameters>
+            <Suppression />
+          </WriteAction>
+        </WriteActions>
+      </Rule>
+    </Rules>
+    <Tasks>
+      <Task ID="Tangible.ProV.ProVService.Report.Script.Task" Accessibility="Public" Enabled="true" Target="SC!Microsoft.SystemCenter.AllManagementServersPool" Timeout="120" Remotable="true">
+        <Category>Custom</Category>
+        <WriteAction ID="PSWA" TypeID="Tangible.ProV.ProVService.Report.Script.Alert.Rule.WA">
+          <TimeoutSeconds>300</TimeoutSeconds>
+        </WriteAction>
+      </Task>
+    </Tasks>
+    <Monitors>
+      <UnitMonitor ID="Tangible.ProV.ProVService.Service.Monitor" Accessibility="Public" Enabled="true" Target="Tangible.ProV.Seed.Class" ParentMonitorID="Health!System.Health.AvailabilityState" Remotable="true" Priority="Normal" TypeID="Tangible.ProV.ProVService.Monitor.MonitorType" ConfirmDelivery="true">
+        <Category>AvailabilityHealth</Category>
+        <AlertSettings AlertMessage="Tangible.ProV.ProVService.Service.Monitor.AlertMessage">
+          <AlertOnState>Warning</AlertOnState> <!-- Warning/Error - This must match a possible OperationalState\HealthState below -->
+          <AutoResolve>true</AutoResolve> <!-- true/false -->
+          <AlertPriority>Normal</AlertPriority> <!-- Low/Normal/High -->
+          <AlertSeverity>Warning</AlertSeverity> <!-- Error/Warning/Information/MatchMonitorHealth -->
+          <AlertParameters>
+            <AlertParameter1>$Data/Context/Property[@Name='Name']$</AlertParameter1>
+            <AlertParameter2>$Target/Host/Property[Type="Windows!Microsoft.Windows.Computer"]/PrincipalName$</AlertParameter2>
+          </AlertParameters>
+        </AlertSettings>		
+        <OperationalStates>
+          <OperationalState ID="Running" MonitorTypeStateID="Running" HealthState="Success" /> <!-- HealthState can be Error/Warning/Success -->
+          <OperationalState ID="NotRunning" MonitorTypeStateID="NotRunning" HealthState="Warning" /> <!-- HealthState can be Error/Warning/Success -->
+        </OperationalStates>
+        <Configuration>
+          <ComputerName />
+          <ServiceName>ProVService</ServiceName> <!-- This is the service name as seen in the registry at HKLM\SYSTEM\CCS\Services -->
+          <IntervalSeconds>300</IntervalSeconds> <!-- How often to check the state of the service.  Every 30 seconds is the default.-->
+          <CheckStartupType>true</CheckStartupType>
+          <Samples>2</Samples> <!-- The number of consecutive times a service is detected as not running before changing state of the monitor. 2 samples is the default -->
+        </Configuration>		
+      </UnitMonitor>
+      <UnitMonitor ID="Tangible.ProV.ProVService.RepeatedEvent.Match.4402.Monitor" Accessibility="Public" Enabled="false" Target="Tangible.ProV.Seed.Class" ParentMonitorID="Health!System.Health.AvailabilityState" Remotable="true" Priority="Normal" TypeID="Windows!Microsoft.Windows.RepeatedEventLogTimer2StateMonitorType" ConfirmDelivery="true">
+        <Category>Custom</Category>
+        <OperationalStates>
+          <OperationalState ID="Success" MonitorTypeStateID="TimerEventRaised" HealthState="Success" />
+          <OperationalState ID="Error" MonitorTypeStateID="RepeatedEventRaised" HealthState="Error" />
+        </OperationalStates>
+        <Configuration>
+          <RepeatedComputerName>$Target/Host/Property[Type="Windows!Microsoft.Windows.Computer"]/NetworkName$</RepeatedComputerName>
+          <RepeatedLogName>Tangible ProV</RepeatedLogName>
+          <RepeatedExpression>
+            <And>
+              <Expression>
+                <SimpleExpression>
+                  <ValueExpression>
+                    <XPathQuery Type="UnsignedInteger">EventDisplayNumber</XPathQuery>
+                  </ValueExpression>
+                  <Operator>Equal</Operator>
+                  <ValueExpression>
+                    <Value Type="UnsignedInteger">4402</Value>
+                  </ValueExpression>
+                </SimpleExpression>
+              </Expression>
+              <Expression>
+                <RegExExpression>
+                  <ValueExpression>
+                    <XPathQuery Type="String">EventDescription</XPathQuery>
+                  </ValueExpression>
+                  <Operator>ContainsSubstring</Operator>
+                  <Pattern>Provisioner: Could not validate the contents of user logon request context: AS-REQ contains an invalid or unknown username type: 1.</Pattern>
+                </RegExExpression>
+              </Expression>
+              <Expression>
+                <RegExExpression>
+                  <ValueExpression>
+                    <XPathQuery Type="String">EventDescription</XPathQuery>
+                  </ValueExpression>
+                  <Operator>MatchesRegularExpression</Operator>
+				  <Pattern>^(Username:.*[^$] .1.)$</Pattern>
+				</RegExExpression>
+              </Expression>
+            </And>
+          </RepeatedExpression>
+          <Consolidator>
+            <ConsolidationProperties />
+            <TimeControl>
+              <WithinTimeSchedule>
+                <Interval>300</Interval>
+              </WithinTimeSchedule>
+            </TimeControl>
+            <CountingCondition>
+              <Count>5</Count>
+              <CountMode>OnNewItemTestOutputRestart_OnTimerRestart</CountMode>
+            </CountingCondition>
+          </Consolidator>
+          <TimerWaitInSeconds>1800</TimerWaitInSeconds>
+        </Configuration>
+      </UnitMonitor>
+      <UnitMonitor ID="Tangible.ProV.ProVService.4402.RepeatEvent.Monitor" Accessibility="Public" Enabled="true" Target="Tangible.ProV.Seed.Class" ParentMonitorID="Health!System.Health.AvailabilityState" Remotable="true" Priority="Normal" TypeID="Tangible.ProV.MonitorType.TimerResetEvent.Repeated" ConfirmDelivery="true">
+        <Category>AvailabilityHealth</Category>
+        <AlertSettings AlertMessage="Tangible.ProV.ProVService.RepeatedEvent.Match.4402.Monitor.AlertMessage">
+          <AlertOnState>Error</AlertOnState>
+          <AutoResolve>true</AutoResolve>
+          <AlertPriority>High</AlertPriority>
+          <AlertSeverity>Error</AlertSeverity>
+          <AlertParameters>
+            <AlertParameter1>$Data/Context/Context/DataItem/EventDescription$</AlertParameter1>
+          </AlertParameters>
+        </AlertSettings>
+        <OperationalStates>
+          <OperationalState ID="Success" MonitorTypeStateID="TimerEventRaised" HealthState="Success" />
+          <OperationalState ID="Error" MonitorTypeStateID="RepeatedEventRaised" HealthState="Error" />
+		</OperationalStates>
+        <Configuration>
+          <ComputerName>$Target/Host/Property[Type="Windows!Microsoft.Windows.Computer"]/NetworkName$</ComputerName>
+          <LogName>Tangible ProV</LogName>
+          <ErrorExpression>
+            <And>
+              <Expression>
+                <SimpleExpression>
+                  <ValueExpression>
+                    <XPathQuery Type="UnsignedInteger">EventDisplayNumber</XPathQuery>
+                  </ValueExpression>
+                  <Operator>Equal</Operator>
+                  <ValueExpression>
+                    <Value Type="UnsignedInteger">4402</Value>
+                  </ValueExpression>
+                </SimpleExpression>
+              </Expression>
+              <Expression>
+                <RegExExpression>
+                  <ValueExpression>
+                    <XPathQuery Type="String">EventDescription</XPathQuery>
+                  </ValueExpression>
+                  <Operator>ContainsSubstring</Operator>
+                  <Pattern>Provisioner: Could not validate the contents of user logon request context: AS-REQ contains an invalid or unknown username type: 1.</Pattern>
+                </RegExExpression>
+              </Expression>
+              <Expression>
+                <RegExExpression>
+                  <ValueExpression>
+                    <XPathQuery Type="String">EventDescription</XPathQuery>
+                  </ValueExpression>
+                  <Operator>MatchesRegularExpression</Operator>
+				  <Pattern>^(Username:.*[^$] .1.)$</Pattern>
+				</RegExExpression>
+              </Expression>
+            </And>
+          </ErrorExpression>
+          <AutoResolveInterval>1800</AutoResolveInterval>
+          <TimerWindowInSeconds>300</TimerWindowInSeconds>
+          <RepeatCount>5</RepeatCount>
+        </Configuration>
+      </UnitMonitor>
+    </Monitors>
+    <Recoveries>
+      <Recovery ID="Tangible.ProV.ProVService.Service.Recovery" Accessibility="Public" Enabled="true" Target="Tangible.ProV.Seed.Class" Monitor="Tangible.ProV.ProVService.Service.Monitor" ResetMonitor="true" ExecuteOnState="Warning" Remotable="true" Timeout="300">
+        <Category>Custom</Category>
+		<WriteAction ID="PSWA" TypeID="Windows!Microsoft.Windows.PowerShellWriteAction">
+		  <ScriptName>Tangible.ProV.ProVService.Service.Recovery.v10200.ps1</ScriptName>
+		  <ScriptBody>
+#=================================================================================
+#  Script to restart a service
+#
+#  Author:  Kevin Holman
+#
+#  Version:  1.0
+#
+#=================================================================================
+
+
+# Manual Testing section - put stuff here for manually testing script - typically parameters:
+#=================================================================================
+# $ServiceName = "ProVService"
+#=================================================================================
+
+
+# Constants section - modify stuff here:
+#=================================================================================
+# Assign script name variable for use in event logging
+$ScriptName = "Tangible.ProV.ProVService.Service.Recovery.v10200.ps1"
+$EventID = "3750"
+#=================================================================================
+
+
+# Starting Script section
+#=================================================================================
+# Gather the start time of the script
+$StartTime = Get-Date
+#Set variable to be used in logging events
+$whoami = whoami
+# Load MOMScript API
+$momapi = New-Object -comObject MOM.ScriptAPI
+#=================================================================================
+
+
+# Begin MAIN script section
+#=================================================================================
+
+[string]$ServiceName = "ProVService"
+
+#Log script event that we are starting task
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Recovery script for service: ($ServiceName) is starting. `n Running as ($whoami).")
+write-host "Recovery script for service: ($ServiceName) is starting. Running as ($whoami)."
+
+#Get the service object
+$Svc = Get-Service $ServiceName
+
+#Check to ensure the service exists:
+IF (!$Svc)
+{
+  $momapi.LogScriptEvent($ScriptName,3751,2, "Service ($ServiceName) was not found on this computer. `n This indicates a misconfiguration of the monitor. `n Error is ($error)")
+  write-host "Service ($ServiceName) was not found on this computer. This indicates a misconfiguration of the monitor. Error is ($error)"
+  EXIT
+}
+
+#Get Service Status:
+[string]$SvcStatus = $Svc.Status
+
+#Do not continue is service is already running
+IF ($SvcStatus -eq "Running")
+{
+  $momapi.LogScriptEvent($ScriptName,3752,2, "Service ($ServiceName) was found to be in the Running state. `n This indicates a misconfiguration of the monitor. `n No recovery action will be taken.")
+  write-host "Service ($ServiceName) was found to be in the Running state. This indicates a misconfiguration of the monitor. No recovery action will be taken."
+  EXIT  
+}
+
+IF ($SvcStatus -ne "Running")
+{
+  #Log recovery information event
+  $momapi.LogScriptEvent($ScriptName,$EventID,0,"Service: ($ServiceName) was found to be in the ($SvcStatus) state.  Recovery will be attempted.")
+  write-host "Service: ($ServiceName) was found to be in the ($SvcStatus) state.  Recovery will be attempted."
+
+  #Attempt First Recovery
+  #Restart-Service -Name $ServiceName -Force
+  get-Service -Name $ServiceName | select -property Name,Status,StartType
+  get-Service -Name $ServiceName | stop-service
+  #Wait time in seconds
+  Start-Sleep 30
+  get-Service -Name $ServiceName | start-service
+  #Wait time in seconds
+  Start-Sleep 15
+  # Recalculate service state
+  $Svc = Get-Service $ServiceName
+  #Get Service Status:
+  $SvcStatus = $Svc.Status
+  $momapi.LogScriptEvent($ScriptName,$EventID,0, "Service ($ServiceName), ($SvcStatus) state.   EventID = ($EventID).`nService restarted, after found in the NOT Running state.")
+  write-host "Service ($ServiceName) restarted was found to be in the NOT Running state."
+}
+
+IF ($SvcStatus -ne "Running")
+{
+  #Attempt Second Recovery
+  $momapi.LogScriptEvent($ScriptName,$EventID,0,"Service: ($ServiceName), Service Status = ($SvcStatus) second attempt at recovering starting now.")
+  write-host "Service: ($ServiceName) second attempt at recovering starting now."  
+  $EventID
+  # From PowerShell (as admin)
+  $Process = get-process -name $ServiceName
+  $Process.ID
+  if ( $Process.ID -ne $null )
+	{
+	taskkill /F /PID $Process.ID
+	sleep 30
+	start-service $ServiceName
+	sleep 15
+	# Recalculate service state
+	$Svc = Get-Service $ServiceName
+	$SvcStatus = $Svc.Status 
+	$momapi.LogScriptEvent($ScriptName,$EventID,0,"Service: ($ServiceName), Service Status = ($SvcStatus).  EventID = ($EventID). `nReboot OR application reinstall required. `nTaskill run to reset service `n Second recovery attempt complete.")
+	write-host "Service: ($ServiceName), Service Status = ($SvcStatus).  EventID = ($EventID).  Reboot OR application reinstall required. `nTaskill run to reset service, second recovery attempt complete." 
+	}
+  if ( $Process.ID -eq $null )
+	{
+	$momapi.LogScriptEvent($ScriptName,$EventID,0,"Service: ($ServiceName), Service Status = ($SvcStatus).  EventID = ($EventID). `nReboot OR application reinstall required.`nSecond recovery attempt complete.")
+	write-host "Service: ($ServiceName), Service Status = ($SvcStatus).  EventID = ($EventID). `nReboot OR application reinstall required. `nSecond recovery attempt complete." 
+	}
+}
+
+IF ($SvcStatus -ne "Running")
+{
+  #Attempt Third Recovery
+  $momapi.LogScriptEvent($ScriptName,$EventID,0,"Service: ($ServiceName), Service Status = ($SvcStatus) third attempt at recovering starting now.")
+  write-host "Service: ($ServiceName) third attempt at recovering starting now."
+  $EventID
+  # From PowerShell (as admin)
+  $Process = get-process -name $ServiceName
+  $Process.ID
+  if ( $Process.ID -ne $null )
+	{
+	taskkill /F /PID $Process.ID
+	sleep 30
+	start-service $ServiceName
+	sleep 15
+	# Recalculate service state
+	$Svc = Get-Service $ServiceName
+	$SvcStatus = $Svc.Status 
+	$momapi.LogScriptEvent($ScriptName,$EventID,0,"Service: ($ServiceName), Service Status = ($SvcStatus).  EventID = ($EventID).`nReboot OR application reinstall required.  Taskill run to reset service `n Third recovery attempt complete.")
+	write-host "Service: ($ServiceName), Service Status = ($SvcStatus).  EventID = ($EventID).`nReboot OR application reinstall required. `nTaskill run to reset service, third recovery attempt complete." 
+	}
+  if ( $Process.ID -eq $null )
+	{
+	$momapi.LogScriptEvent($ScriptName,$EventID,0,"Service: ($ServiceName), Service Status = ($SvcStatus).  EventID = ($EventID).`nReboot OR application reinstall required.`nThird recovery attempt complete.")
+	write-host "Service: ($ServiceName), Service Status = ($SvcStatus).  EventID = ($EventID).`nReboot OR application reinstall required.`nThird recovery attempt complete." 
+	}
+}
+
+IF ($SvcStatus -eq "Running")
+{
+  #Log event of a successful restart
+  $EventID
+  $momapi.LogScriptEvent($ScriptName,$EventID,0,"Service: ($ServiceName), Service Status = ($SvcStatus).  EventID = ($EventID).`nProVService was successfully restarted and then detected to be in the Running state.")
+  write-host "Service: ($ServiceName), Service Status = ($SvcStatus), was successfully restarted and then detected to be in the Running state."
+}
+ELSE
+{
+  #Log event of a successful restart
+  $EventID
+  $momapi.LogScriptEvent($ScriptName,3753,2,"Service: ($ServiceName) is not running, Service Status = ($SvcStatus).  EventID = ($EventID)`nReboot OR application reinstall required.`nTaskill run to reset service.`nRecovery was attempted and failed.`nManual intervention is required.`nThe last detected service status was ($SvcStatus).")
+  write-host "Service: ($ServiceName) is not running, Service Status = ($SvcStatus).`nReboot OR application reinstall required.`nTaskill run to reset service.`nRecovery was attempted and failed.`nManual intervention is required.`nThe last detected service status was ($SvcStatus)."
+}
+
+# Check to see if this recovery script has been run multiple times in the last x minutes for detection of too many recovery actions
+$Message = "*($ServiceName) is starting*"
+$Events = Get-EventLog -LogName 'Operations Manager' -After $StartTime.AddMinutes(-60) -Message $Message | where {$_.EventID -eq 3750}
+$EventCount = $Events.Count
+IF ($EventCount -ge 3)
+{
+  $momapi.LogScriptEvent($ScriptName,3754,2,"Too many service recoveries have been attempted for ($ServiceName), Service Status = ($SvcStatus). `n ($EventCount) recoveries are detected in the event log. `n Manual intervention is required.")
+  write-host "Too many service recoveries have been attempted for ($ServiceName). ($EventCount) recoveries are detected in the event log. Manual intervention is required."
+}
+
+# End of script section
+#=================================================================================
+#Log an event for script ending and total execution time.
+$EndTime = Get-Date
+$ScriptTime = ($EndTime - $StartTime).TotalSeconds
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"`n Script Completed. `n Script Runtime: ($ScriptTime) seconds.")
+write-host "Script Completed. Script Runtime: ($ScriptTime) seconds."
+#=================================================================================
+# End of script		  
+		  </ScriptBody>
+		  <TimeoutSeconds>240</TimeoutSeconds>
+		</WriteAction>
+      </Recovery>
+      <Recovery ID="Tangible.ProV.ProVService.Event4402.Service.Recovery" Accessibility="Public" Enabled="false" Target="Tangible.ProV.Seed.Class" Monitor="Tangible.ProV.ProVService.4402.RepeatEvent.Monitor" ResetMonitor="true" ExecuteOnState="Error" Remotable="true" Timeout="300">
+        <Category>Custom</Category>
+		<WriteAction ID="PSWA" TypeID="Windows!Microsoft.Windows.PowerShellWriteAction">
+		  <ScriptName>Tangible.ProV.ProVService.Event4402.Service.Recovery.v10200.ps1</ScriptName>
+		  <ScriptBody>
+#=================================================================================
+#  Script to restart a service
+#
+#  Author:  Kevin Holman
+#
+#  Version:  1.0
+#
+#=================================================================================
+
+
+# Manual Testing section - put stuff here for manually testing script - typically parameters:
+#=================================================================================
+# $ServiceName = "ProVService"
+#=================================================================================
+
+
+# Constants section - modify stuff here:
+#=================================================================================
+# Assign script name variable for use in event logging
+$ScriptName = "Tangible.ProV.ProVService.Event4402.Service.Recovery.v10200.ps1"
+$EventID = "3755"
+#=================================================================================
+
+
+# Starting Script section
+#=================================================================================
+# Gather the start time of the script
+$StartTime = Get-Date
+#Set variable to be used in logging events
+$whoami = whoami
+# Load MOMScript API
+$momapi = New-Object -comObject MOM.ScriptAPI
+#=================================================================================
+
+
+# Begin MAIN script section
+#=================================================================================
+
+[string]$ServiceName = "ProVService"
+
+#Log script event that we are starting task
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Recovery script for service: ($ServiceName) is starting.  Running as ($whoami).")
+write-host "Recovery script for service: ($ServiceName) is starting. Running as ($whoami)."
+
+#Get the service object
+$Svc = Get-Service $ServiceName
+
+#Check to ensure the service exists:
+IF (!$Svc)
+{
+  $momapi.LogScriptEvent($ScriptName,3756,2, "Service ($ServiceName) was not found on this computer. `n This indicates a misconfiguration of the monitor. `n Error is ($error)")
+  write-host "Service ($ServiceName) was not found on this computer. This indicates a misconfiguration of the monitor. Error is ($error)"
+  EXIT
+}
+
+#Get Service Status:
+[string]$SvcStatus = $Svc.Status
+
+#Do not continue is service is already running
+IF ($SvcStatus -eq "Running")
+{
+  $momapi.LogScriptEvent($ScriptName,3757,2, "Service ($ServiceName) was found to be in the Running state. `n This indicates a misconfiguration of the monitor. `n No recovery action will be taken.")
+  write-host "Service ($ServiceName) was found to be in the Running state. This indicates a misconfiguration of the monitor. No recovery action will be taken."
+  EXIT  
+}
+
+IF ($SvcStatus -ne "Running")
+{
+  #Log recovery information event
+  $momapi.LogScriptEvent($ScriptName,$EventID,0,"Service: ($ServiceName) was found to be in the ($SvcStatus) state.  Recovery will be attempted.")
+  write-host "Service: ($ServiceName) was found to be in the ($SvcStatus) state.  Recovery will be attempted."
+
+  #Attempt First Recovery
+  #Restart-Service -Name $ServiceName -Force
+  get-Service -Name $ServiceName | select -property Name,Status,StartType
+  get-Service -Name $ServiceName | stop-service
+  #Wait time in seconds
+  Start-Sleep 30
+  get-Service -Name $ServiceName | start-service
+  #Wait time in seconds
+  Start-Sleep 15
+  # Recalculate service state
+  $Svc = Get-Service $ServiceName
+  #Get Service Status:
+  $SvcStatus = $Svc.Status
+  $momapi.LogScriptEvent($ScriptName,$EventID,0, "Service ($ServiceName), ($SvcStatus) state.   EventID = ($EventID).`nService restarted, after found in the NOT Running state.")
+  write-host "Service ($ServiceName) restarted was found to be in the NOT Running state."
+}
+
+IF ($SvcStatus -ne "Running")
+{
+  #Attempt Second Recovery
+  $momapi.LogScriptEvent($ScriptName,$EventID,0,"Service: ($ServiceName), Service Status = ($SvcStatus) second attempt at recovering starting now.")
+  write-host "Service: ($ServiceName) second attempt at recovering starting now."  
+  $EventID
+  # From PowerShell (as admin)
+  $Process = get-process -name $ServiceName
+  $Process.ID
+  if ( $Process.ID -ne $null )
+	{
+	taskkill /F /PID $Process.ID
+	sleep 30
+	start-service $ServiceName
+	sleep 15
+	# Recalculate service state
+	$Svc = Get-Service $ServiceName
+	$SvcStatus = $Svc.Status 
+	$momapi.LogScriptEvent($ScriptName,$EventID,0,"Service: ($ServiceName), Service Status = ($SvcStatus).  EventID = ($EventID). `nReboot OR application reinstall required. `nTaskill run to reset service `n Second recovery attempt complete.")
+	write-host "Service: ($ServiceName), Service Status = ($SvcStatus).  EventID = ($EventID).  Reboot OR application reinstall required. `nTaskill run to reset service, second recovery attempt complete." 
+	}
+  if ( $Process.ID -eq $null )
+	{
+	$momapi.LogScriptEvent($ScriptName,$EventID,0,"Service: ($ServiceName), Service Status = ($SvcStatus).  EventID = ($EventID). `nReboot OR application reinstall required.`nSecond recovery attempt complete.")
+	write-host "Service: ($ServiceName), Service Status = ($SvcStatus).  EventID = ($EventID). `nReboot OR application reinstall required. `nSecond recovery attempt complete." 
+	}
+}
+
+IF ($SvcStatus -ne "Running")
+{
+  #Attempt Third Recovery
+  $momapi.LogScriptEvent($ScriptName,$EventID,0,"Service: ($ServiceName), Service Status = ($SvcStatus) third attempt at recovering starting now.")
+  write-host "Service: ($ServiceName) third attempt at recovering starting now."
+  $EventID
+  # From PowerShell (as admin)
+  $Process = get-process -name $ServiceName
+  $Process.ID
+  if ( $Process.ID -ne $null )
+	{
+	taskkill /F /PID $Process.ID
+	sleep 30
+	start-service $ServiceName
+	sleep 15
+	# Recalculate service state
+	$Svc = Get-Service $ServiceName
+	$SvcStatus = $Svc.Status 
+	$momapi.LogScriptEvent($ScriptName,$EventID,0,"Service: ($ServiceName), Service Status = ($SvcStatus).  EventID = ($EventID).`nReboot OR application reinstall required.  Taskill run to reset service `n Third recovery attempt complete.")
+	write-host "Service: ($ServiceName), Service Status = ($SvcStatus).  EventID = ($EventID).`nReboot OR application reinstall required. `nTaskill run to reset service, third recovery attempt complete." 
+	}
+  if ( $Process.ID -eq $null )
+	{
+	$momapi.LogScriptEvent($ScriptName,$EventID,0,"Service: ($ServiceName), Service Status = ($SvcStatus).  EventID = ($EventID).`nReboot OR application reinstall required.`nThird recovery attempt complete.")
+	write-host "Service: ($ServiceName), Service Status = ($SvcStatus).  EventID = ($EventID).`nReboot OR application reinstall required.`nThird recovery attempt complete." 
+	}
+}
+
+IF ($SvcStatus -eq "Running")
+{
+  #Log event of a successful restart
+  $EventID
+  $momapi.LogScriptEvent($ScriptName,$EventID,0,"Service: ($ServiceName), Service Status = ($SvcStatus).  EventID = ($EventID).`nProVService was successfully restarted and then detected to be in the Running state.")
+  write-host "Service: ($ServiceName), Service Status = ($SvcStatus), was successfully restarted and then detected to be in the Running state."
+}
+ELSE
+{
+  #Log event of a successful restart
+  $EventID
+  $momapi.LogScriptEvent($ScriptName,3758,2,"Service: ($ServiceName) is not running, Service Status = ($SvcStatus).  EventID = ($EventID)`nReboot OR application reinstall required.`nTaskill run to reset service.`nRecovery was attempted and failed.`nManual intervention is required.`nThe last detected service status was ($SvcStatus).")
+  write-host "Service: ($ServiceName) is not running, Service Status = ($SvcStatus).`nReboot OR application reinstall required.`nTaskill run to reset service.`nRecovery was attempted and failed.`nManual intervention is required.`nThe last detected service status was ($SvcStatus)."
+}
+
+# Check to see if this recovery script has been run multiple times in the last x minutes for detection of too many recovery actions
+$Message = "*($ServiceName) is starting*"
+$Events = Get-EventLog -LogName 'Operations Manager' -After $StartTime.AddMinutes(-60) -Message $Message | where {$_.EventID -eq 3750}
+$EventCount = $Events.Count
+IF ($EventCount -ge 3)
+{
+  $momapi.LogScriptEvent($ScriptName,3759,2,"Too many service recoveries have been attempted for ($ServiceName), Service Status = ($SvcStatus). `n ($EventCount) recoveries are detected in the event log. `n Manual intervention is required.")
+  write-host "Too many service recoveries have been attempted for ($ServiceName). ($EventCount) recoveries are detected in the event log. Manual intervention is required."
+}
+
+# End of script section
+#=================================================================================
+#Log an event for script ending and total execution time.
+$EndTime = Get-Date
+$ScriptTime = ($EndTime - $StartTime).TotalSeconds
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Script Completed. Script Runtime: ($ScriptTime) seconds.")
+write-host "Script Completed. Script Runtime: ($ScriptTime) seconds."
+#=================================================================================
+# End of script		  
+		  </ScriptBody>
+		  <TimeoutSeconds>240</TimeoutSeconds>
+		</WriteAction>
+      </Recovery>
+    </Recoveries>
+  </Monitoring>
+  <Presentation>
+    <StringResources>
+      <StringResource ID="Tangible.ProV.ProVService.Service.Monitor.AlertMessage" />	
+	  <StringResource ID="Tangible.ProV.ProVService.Service.ServiceNotFound.Recovery.Rule.AlertMessage" />
+      <StringResource ID="Tangible.ProV.ProVService.Service.ServiceFoundRunning.Recovery.Rule.AlertMessage" />
+	  <StringResource ID="Tangible.ProV.ProVService.Service.ServiceRecoveryFailed.Recovery.Rule.AlertMessage" />
+	  <StringResource ID="Tangible.ProV.ProVService.Service.TooManyRecoveryAttempts.Recovery.Rule.AlertMessage" />
+	  <StringResource ID="Tangible.ProV.ProVService.RepeatedEvent.Match.4402.Monitor.AlertMessage" />
+	  <StringResource ID="Tangible.ProV.ProVService.4402.RepeatEvent.Monitor.AlertMessage" />
+	  <StringResource ID="Tangible.ProV.ProVService.Event4402.Service.ServiceNotFound.Recovery.Rule.AlertMessage" />
+      <StringResource ID="Tangible.ProV.ProVService.Event4402.Service.ServiceFoundRunning.Recovery.Rule.AlertMessage" />
+	  <StringResource ID="Tangible.ProV.ProVService.Event4402.Service.ServiceRecoveryFailed.Recovery.Rule.AlertMessage" />
+	  <StringResource ID="Tangible.ProV.ProVService.Event4402.Service.TooManyRecoveryAttempts.Recovery.Rule.AlertMessage" />
+	  <StringResource ID="Tangible.ProV.ProVService.Event4402.Service.RebootRequired.Rule.AlertMessage" />
+	  <StringResource ID="Tangible.ProV.ProVService.Report.Script.Alert.Rule.AlertMessage" />
+	  <StringResource ID="Tangible.ProV.ProVService.Report.Script.Task.Alert.Rule.AlertMessage" />
+	  <StringResource ID="Tangible.ProV.ProVService.Event2802.CouldNotValidateProductKey.Alert.Rule.AlertMessage" />
+    </StringResources>
+  </Presentation>
+  <LanguagePacks>
+    <LanguagePack ID="ENU" IsDefault="false">
+      <DisplayStrings>
+        <DisplayString ElementID="Tangible.ProV.Application.Customizations">
+          <Name>Tangible ProV Application Customizations</Name>
+          <Description>
+v1.0.2.0   5 Jan 2024 - Resolution State logic improvements for large environments, Whitespace audit, Event 2802 rule alert
+v1.0.1.8  18 Jul 2023 - Updated reports to informational, including service not found, found running, toomanyRecovery alerts
+v1.0.1.7  31 Jan 2022 - Updated 4402 event - MatchesRegularExpression and DoesNotMatchRegularExpression monitors
+v1.0.1.2  25 Jan 2022 - Updated 4402 event - DoesNotMatchRegularExpression
+v1.0.1.0   8 Dec 2021 - New 4402 monitortype,monitor (from Skype) for 33333 events
+v1.0.0.21 16 Jul 2021 - Updated recovery script events, text, 3753,3758 rule/alert messages, daily report
+v1.0.0.17 14 Jul 2021 - Updated new Reboot required rule when service will not start, adjusted report/cleanup monitors
+v1.0.0.12  8 Jul 2021 - Updated datasource/WA scripts, increased 4402 event count from 25 to 100
+v1.0.0.8   6 Jul 2021 - Updated Recovery logic
+v1.0.0.0   1 Jul 2021 - Created mgmt pack for ProV alerts</Description>
+        </DisplayString>
+        <DisplayString ElementID="Tangible.ProV.Seed.Class">
+          <Name>Tangible ProV Seed Class</Name>
+        </DisplayString>
+
+        <DisplayString ElementID="Tangible.ProV.Seed.Class.Discovery">
+          <Name>Tangible ProV Seed Class Discovery</Name>
+        </DisplayString>
+
+		<DisplayString ElementID="Tangible.ProV.ProVService.Report.Script.Alert.Rule.Datasource">
+          <Name>Tangible ProV ProVService Report Script Alert Rule Datasource</Name>
+        </DisplayString>
+
+		<DisplayString ElementID="Tangible.ProV.ProVService.Report.Script.Alert.Rule.WA">
+          <Name>Tangible ProV ProVService Report Script Alert Rule WA</Name>
+        </DisplayString>
+
+        <DisplayString ElementID="Tangible.ProV.ProVService.Monitor.MonitorType">
+          <Name>Tangible ProV Service Monitor MonitorType</Name>
+        </DisplayString>
+
+        <DisplayString ElementID="Tangible.ProV.ProVService.Report.Script.Alert.Rule">
+          <Name>Tangible ProV ProVService Report Script Alert Rule</Name>
+        </DisplayString>
+        <DisplayString ElementID="Tangible.ProV.ProVService.Report.Script.Alert.Rule.AlertMessage">
+          <Name>Tangible ProV ProVService Report Script Alert Rule AlertMessage</Name>
+          <Description>{0}
+
+{1}</Description>
+	    </DisplayString>
+        <DisplayString ElementID="Tangible.ProV.ProVService.Report.Script.Task.Alert.Rule">
+          <Name>Tangible ProV ProVService Report Script Task Alert Rule</Name>
+        </DisplayString>
+		<DisplayString ElementID="Tangible.ProV.ProVService.Report.Script.Task.Alert.Rule.AlertMessage">
+          <Name>Tangible ProV ProVService Report Script Alert Task AlertMessage</Name>
+          <Description>{0}</Description>
+        </DisplayString>
+		<DisplayString ElementID="Tangible.ProV.ProVService.Event4402.Service.RebootRequired.Recovery.Rule">
+          <Name>Tangible ProV ProVService Service Event4402 Reboot Required</Name>
+        </DisplayString>
+		<DisplayString ElementID="Tangible.ProV.ProVService.Event4402.Service.RebootRequired.Rule.AlertMessage">
+          <Name>Tangible ProV ProVService Service Event4402 Reboot Required alert rule</Name>
+          <Description>Tangible ProVService (DODVisitor) will not start.
+See further details below: {0}</Description>
+        </DisplayString>
+		<DisplayString ElementID="Tangible.ProV.ProVService.Event2802.CouldNotValidateProductKey.Alert.Rule">
+          <Name>Tangible ProV ProVService Report Script Alert Rule</Name>
+        </DisplayString>
+		<DisplayString ElementID="Tangible.ProV.ProVService.Event2802.CouldNotValidateProductKey.Alert.Rule.AlertMessage">
+          <Name>Tangible ProV ProVService Report Script Alert Task AlertMessage</Name>
+          <Description>{0}</Description>
+        </DisplayString>
+		<DisplayString ElementID="Tangible.ProV.ProVService.Service.ServiceNotFound.Recovery.Rule">
+          <Name>Tangible ProV ProVService Service Service Recovery Failed - Service Not Found Rule</Name>
+        </DisplayString>
+        <DisplayString ElementID="Tangible.ProV.ProVService.Service.ServiceNotFound.Recovery.Rule.AlertMessage">
+          <Name>Tangible ProV ProVService Service Recovery Failed - Service Not Found</Name>
+          <Description>Event Description: {0}</Description>
+        </DisplayString>		  
+		<DisplayString ElementID="Tangible.ProV.ProVService.Service.ServiceFoundRunning.Recovery.Rule">
+          <Name>Tangible ProV ProVService Service Service Recovery Failed - Service Already Running Rule</Name>
+        </DisplayString>
+        <DisplayString ElementID="Tangible.ProV.ProVService.Service.ServiceFoundRunning.Recovery.Rule.AlertMessage">
+          <Name>Tangible ProV ProVService Service Recovery Failed - Service Already Running</Name>
+          <Description>Event Description: {0}</Description>
+        </DisplayString>
+		<DisplayString ElementID="Tangible.ProV.ProVService.Service.ServiceRecoveryFailed.Recovery.Rule">
+          <Name>Tangible ProV ProVService Service Reboot or application reinstall required</Name>
+        </DisplayString>
+        <DisplayString ElementID="Tangible.ProV.ProVService.Service.ServiceRecoveryFailed.Recovery.Rule.AlertMessage">
+          <Name>Tangible ProV ProVService Service Reboot or application reinstall required</Name>
+          <Description>Tangible ProV ProVService Service Recovery Failed - Service is not running
+
+Event Description: {0}</Description>
+        </DisplayString>
+		<DisplayString ElementID="Tangible.ProV.ProVService.Service.TooManyRecoveryAttempts.Recovery.Rule">
+          <Name>Tangible ProV ProVService Service Service Recovery has attempted to recover the service too many times Rule</Name>
+        </DisplayString>
+        <DisplayString ElementID="Tangible.ProV.ProVService.Service.TooManyRecoveryAttempts.Recovery.Rule.AlertMessage">
+          <Name>Tangible ProV ProVService Service Recovery has attempted to recover the service too many times</Name>
+          <Description>Event Description: {0}</Description>
+        </DisplayString>
+		<DisplayString ElementID="Tangible.ProV.ProVService.Event4402.Service.ServiceNotFound.Recovery.Rule">
+          <Name>Tangible ProV ProVService Service Event4402 Service Recovery Failed - Service Not Found Rule</Name>
+        </DisplayString>
+        <DisplayString ElementID="Tangible.ProV.ProVService.Event4402.Service.ServiceNotFound.Recovery.Rule.AlertMessage">
+          <Name>Tangible ProV ProVService Service Event4402 Recovery Failed - Service Not Found</Name>
+          <Description>Event Description: {0}</Description>
+        </DisplayString>		  
+		<DisplayString ElementID="Tangible.ProV.ProVService.Event4402.Service.ServiceFoundRunning.Recovery.Rule">
+          <Name>Tangible ProV ProVService Service Event4402 Service Recovery Failed - Service Already Running Rule</Name>
+        </DisplayString>
+        <DisplayString ElementID="Tangible.ProV.ProVService.Event4402.Service.ServiceFoundRunning.Recovery.Rule.AlertMessage">
+          <Name>Tangible ProV ProVService Service Event4402 Recovery Failed - Service Already Running</Name>
+          <Description>Event Description: {0}</Description>
+        </DisplayString>
+		<DisplayString ElementID="Tangible.ProV.ProVService.Event4402.Service.ServiceRecoveryFailed.Recovery.Rule">
+          <Name>Tangible ProV ProVService Service Event4402 Service Recovery Failed - Service is not running Rule</Name>
+        </DisplayString>
+        <DisplayString ElementID="Tangible.ProV.ProVService.Event4402.Service.ServiceRecoveryFailed.Recovery.Rule.AlertMessage">
+          <Name>Tangible ProV ProVService Service Event4402 Recovery Failed - Service is not running</Name>
+          <Description>Event Description: {0}</Description>
+        </DisplayString>
+		<DisplayString ElementID="Tangible.ProV.ProVService.Event4402.Service.TooManyRecoveryAttempts.Recovery.Rule">
+          <Name>Tangible ProV ProVService Service Event4402 Service Recovery has attempted to recover the service too many times Rule</Name>
+        </DisplayString>
+        <DisplayString ElementID="Tangible.ProV.ProVService.Event4402.Service.TooManyRecoveryAttempts.Recovery.Rule.AlertMessage">
+          <Name>Tangible ProV ProVService Service Event4402 Recovery has attempted to recover the service too many times</Name>
+          <Description>Event Description: {0}</Description>
+        </DisplayString>
+
+		<DisplayString ElementID="Tangible.ProV.ProVService.Report.Script.Task">
+          <Name>Tangible ProV ProVService Report Script Alert Task</Name>
+        </DisplayString>
+
+		<DisplayString ElementID="Tangible.ProV.ProVService.Service.Monitor">
+          <Name>Tangible ProV ProVService Service Monitor</Name>
+        </DisplayString>
+        <DisplayString ElementID="Tangible.ProV.ProVService.Service.Monitor" SubElementID="Running">
+          <Name>Running</Name>
+        </DisplayString>
+        <DisplayString ElementID="Tangible.ProV.ProVService.Service.Monitor" SubElementID="NotRunning">
+          <Name>Not Running</Name>
+        </DisplayString>
+        <DisplayString ElementID="Tangible.ProV.ProVService.Service.Monitor.AlertMessage">
+          <Name>Tangible ProV ProVService Service Is Not Running</Name>
+          <Description>The Service: {0} is not running on Computer: {1}</Description>
+        </DisplayString>		
+        <DisplayString ElementID="Tangible.ProV.ProVService.RepeatedEvent.Match.4402.Monitor">
+          <Name>Tangible ProV Application Repeated Event - 5+ parsed matched 4402 events in past 5 minutes</Name>
+          <Description>Created 1 Jul 2021 for ProV issues/outage</Description>
+        </DisplayString>
+        <DisplayString ElementID="Tangible.ProV.ProVService.RepeatedEvent.Match.4402.Monitor" SubElementID="Success">
+          <Name>Timer Event Raised</Name>
+        </DisplayString>
+        <DisplayString ElementID="Tangible.ProV.ProVService.RepeatedEvent.Match.4402.Monitor" SubElementID="Error">
+          <Name>Repeated Event Raised</Name>
+        </DisplayString>
+        <DisplayString ElementID="Tangible.ProV.ProVService.RepeatedEvent.Match.4402.Monitor.AlertMessage">
+          <Name>Tangible ProV Application 4402 Repeat Event - 5+ parsed matched 4402 events in past 5 minutes</Name>
+          <Description>Event Description: {0}</Description>
+        </DisplayString>
+		
+        <DisplayString ElementID="Tangible.ProV.ProVService.4402.RepeatEvent.Monitor">
+          <Name>Tangible ProV Application 4402 Repeat Event - 5+ parsed 4402 events in past 5 minutes</Name>
+          <Description>Created 8 Dec 2021 for ProV issues/outage</Description>
+        </DisplayString>
+        <DisplayString ElementID="Tangible.ProV.ProVService.4402.RepeatEvent.Monitor" SubElementID="Success">
+          <Name>Timer Event Raised</Name>
+        </DisplayString>
+        <DisplayString ElementID="Tangible.ProV.ProVService.4402.RepeatEvent.Monitor" SubElementID="Error">
+          <Name>Repeated Event Raised</Name>
+        </DisplayString>
+        <DisplayString ElementID="Tangible.ProV.ProVService.4402.RepeatEvent.Monitor.AlertMessage">
+          <Name>Tangible ProV Application 4402 Repeat Event - 5+ parsed 4402 events in past 5 minutes</Name>
+          <Description>Event Description: {0}</Description>
+        </DisplayString>
+
+        <DisplayString ElementID="Tangible.ProV.ProVService.Service.Recovery">
+          <Name>Tangible ProV ProVService Service Service Recovery</Name>
+        </DisplayString>
+        <DisplayString ElementID="Tangible.ProV.ProVService.Event4402.Service.Recovery">
+          <Name>Tangible ProV ProVService Event4402 Service Service Recovery</Name>
+        </DisplayString>
+     </DisplayStrings>
+      <KnowledgeArticles>
+        <KnowledgeArticle ElementID="Tangible.ProV.ProVService.Service.Monitor" Visible="true">
+          <MamlContent>
+            <section xmlns:maml="http://schemas.microsoft.com/maml/2004/10" xmlns="http://schemas.microsoft.com/maml/2004/10">
+              <maml:title>Summary</maml:title>
+              <maml:para>The DOD Visitor service is NOT running</maml:para>
+            </section>
+            <section xmlns:maml="http://schemas.microsoft.com/maml/2004/10" xmlns="http://schemas.microsoft.com/maml/2004/10">
+              <maml:title>Causes</maml:title>
+              <maml:para>This can happen for a few reasons:</maml:para>
+              <maml:para />
+              <maml:list>
+                <maml:listItem>
+                  <maml:para>DOD Visitor ID's may be failing to login</maml:para>
+                </maml:listItem>
+                <maml:listItem>
+                  <maml:para>'Tangible ProV' Event Log, Event ID 4402 events may be cutting for invalid or unknown username type: 1</maml:para>
+                </maml:listItem>
+                <maml:listItem>
+                  <maml:para>Alert occurs when there are more than 10 alerts within a few minutes</maml:para>
+                </maml:listItem>
+              </maml:list>
+            </section>
+            <section xmlns:maml="http://schemas.microsoft.com/maml/2004/10" xmlns="http://schemas.microsoft.com/maml/2004/10">
+              <maml:title>Resolutions</maml:title>
+              <maml:para>Try the following troubleshooting steps to attempt to fix the problem</maml:para>
+              <maml:para />
+              <maml:list>
+                <maml:listItem>
+                  <maml:para>RDP to affected DC server to restart ProVService</maml:para>
+                </maml:listItem>
+                <maml:listItem>
+                  <maml:para>Leverage PowerShell (as Admin) to run 'get-service ProVService | start-service' to restart affected service</maml:para>
+                </maml:listItem>
+                <maml:listItem>
+                  <maml:para>Additionally, run 'get-eventlog -LogName "Tangible ProV" -newest 50 to see if the 4402 events subside</maml:para>
+                </maml:listItem>
+                <maml:listItem>
+                  <maml:para>Alternatively, run get-eventlog command above to verify if EventID 4402 Event Description no longer contains:</maml:para>
+                  <maml:para>Inside Event Message 'Provisioner: Could not validate the contents of user logon request context: AS-REQ contains an invalid or unknown username type: 1.'</maml:para>
+                  <maml:para></maml:para>
+                  <maml:para>Command syntax:  'get-eventlog -LogName "Tangible ProV" -newest 50 | ? { $_.Message -like "*Provisioner: Could not validate the contents of user logon request context: AS-REQ contains an invalid or unknown username type: 1*" } </maml:para>
+	            </maml:listItem>
+              </maml:list>
+            </section>
+          </MamlContent>
+        </KnowledgeArticle>
+        <KnowledgeArticle ElementID="Tangible.ProV.ProVService.RepeatedEvent.Match.4402.Monitor" Visible="true">
+          <MamlContent>
+            <section xmlns:maml="http://schemas.microsoft.com/maml/2004/10" xmlns="http://schemas.microsoft.com/maml/2004/10">
+              <maml:title>Summary</maml:title>
+              <maml:para>The DOD Visitor service is having repeated user login failures</maml:para>
+            </section>
+            <section xmlns:maml="http://schemas.microsoft.com/maml/2004/10" xmlns="http://schemas.microsoft.com/maml/2004/10">
+              <maml:title>Causes</maml:title>
+              <maml:para>This can happen for a few reasons:</maml:para>
+              <maml:para />
+              <maml:list>
+                <maml:listItem>
+                  <maml:para>DOD Visitor ID's may be failing to login (takes 10 login failures before an ID is created</maml:para>
+                </maml:listItem>
+                <maml:listItem>
+                  <maml:para>This monitor counts the 'Tangible ProV' Event Log, for 150+ Event ID 4402 events in a 5 minute timeframe</maml:para>
+                  <maml:para>	  The monitor looks for specific substrings in the message that includes '*invalid or unknown username type: 1'</maml:para>
+                </maml:listItem>
+                <maml:listItem>
+                  <maml:para>Alert occurs when there are more than 150 events within five (5) minutes</maml:para>
+                </maml:listItem>
+              </maml:list>
+            </section>
+            <section xmlns:maml="http://schemas.microsoft.com/maml/2004/10" xmlns="http://schemas.microsoft.com/maml/2004/10">
+              <maml:title>Resolutions</maml:title>
+              <maml:para>If the recovery fails, try the following troubleshooting steps to attempt to fix the problem</maml:para>
+              <maml:para />
+              <maml:list>
+                <maml:listItem>
+                  <maml:para>RDP to affected DC server to restart ProVService</maml:para>
+                </maml:listItem>
+                <maml:listItem>
+                  <maml:para>Leverage PowerShell (as Admin) to run 'get-service ProVService | start-service' to restart affected service</maml:para>
+                </maml:listItem>
+                <maml:listItem>
+                  <maml:para>Additionally, run 'get-eventlog -LogName "Tangible ProV" -newest 50 to see if the 4402 events subside</maml:para>
+                </maml:listItem>
+                <maml:listItem>
+                  <maml:para>Alternatively, run get-eventlog command above to verify if EventID 4402 Event Description no longer contains:</maml:para>
+                  <maml:para>Inside Event Message 'Provisioner: Could not validate the contents of user logon request context: AS-REQ contains an invalid or unknown username type: 1.'</maml:para>
+                  <maml:para></maml:para>
+                  <maml:para>Command syntax:  'get-eventlog -LogName "Tangible ProV" -newest 50 | ? { $_.Message -like "*Provisioner: Could not validate the contents of user logon request context: AS-REQ contains an invalid or unknown username type: 1*" } </maml:para>
+	            </maml:listItem>
+              </maml:list>
+            </section>
+          </MamlContent>
+        </KnowledgeArticle>
+        <KnowledgeArticle ElementID="Tangible.ProV.ProVService.4402.RepeatEvent.Monitor" Visible="true">
+          <MamlContent>
+            <section xmlns:maml="http://schemas.microsoft.com/maml/2004/10" xmlns="http://schemas.microsoft.com/maml/2004/10">
+              <maml:title>Summary</maml:title>
+              <maml:para>The DOD Visitor service is having repeated user login failures</maml:para>
+            </section>
+            <section xmlns:maml="http://schemas.microsoft.com/maml/2004/10" xmlns="http://schemas.microsoft.com/maml/2004/10">
+              <maml:title>Causes</maml:title>
+              <maml:para>This can happen for a few reasons:</maml:para>
+              <maml:para />
+              <maml:list>
+                <maml:listItem>
+                  <maml:para>DOD Visitor ID's may be failing to login (takes 10 login failures before an ID is created</maml:para>
+                </maml:listItem>
+                <maml:listItem>
+                  <maml:para>This monitor counts the 'Tangible ProV' Event Log, for 150+ Event ID 4402 events in a 5 minute timeframe</maml:para>
+                  <maml:para>	  The monitor looks for specific substrings in the message that includes '*invalid or unknown username type: 1'</maml:para>
+                </maml:listItem>
+                <maml:listItem>
+                  <maml:para>Alert occurs when there are more than 25 events within five (5) minutes</maml:para>
+                </maml:listItem>
+              </maml:list>
+            </section>
+            <section xmlns:maml="http://schemas.microsoft.com/maml/2004/10" xmlns="http://schemas.microsoft.com/maml/2004/10">
+              <maml:title>Resolutions</maml:title>
+              <maml:para>If the recovery fails, try the following troubleshooting steps to attempt to fix the problem</maml:para>
+              <maml:para />
+              <maml:list>
+                <maml:listItem>
+                  <maml:para>RDP to affected DC server to restart ProVService</maml:para>
+                </maml:listItem>
+                <maml:listItem>
+                  <maml:para>Leverage PowerShell (as Admin) to run 'get-service ProVService | start-service' to restart affected service</maml:para>
+                </maml:listItem>
+                <maml:listItem>
+                  <maml:para>Additionally, run 'get-eventlog -LogName "Tangible ProV" -newest 50 to see if the 4402 events subside</maml:para>
+                </maml:listItem>
+                <maml:listItem>
+                  <maml:para>Alternatively, run get-eventlog command above to verify if EventID 4402 Event Description no longer contains:</maml:para>
+                  <maml:para>Inside Event Message 'Provisioner: Could not validate the contents of user logon request context: AS-REQ contains an invalid or unknown username type: 1.'</maml:para>
+                  <maml:para></maml:para>
+                  <maml:para>Command syntax:  'get-eventlog -LogName "Tangible ProV" -newest 50 | ? { $_.Message -like "*Provisioner: Could not validate the contents of user logon request context: AS-REQ contains an invalid or unknown username type: 1*" } </maml:para>
+	            </maml:listItem>
+              </maml:list>
+            </section>
+          </MamlContent>
+        </KnowledgeArticle>
+      </KnowledgeArticles>
+    </LanguagePack>
+  </LanguagePacks>
+</ManagementPack>
