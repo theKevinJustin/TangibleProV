@@ -1,7 +1,7 @@
 # TangibleProV
 Tangible ProV Application Customizations v1.0.2.0
 
-Download [https://github.com/theKevinJustin/TangibleProV/blob/main/Tangible.ProV.Application.Customizations.xml](https://github.com/theKevinJustin/TangibleProV/blob/main/Tangible.ProV.Application.Customizations.xml)here
+Download [here](https://github.com/theKevinJustin/TangibleProV/blob/main/Tangible.ProV.Application.Customizations.xml)
 
 ### Tangible ProV Application Customizations 
 Management pack configures Seed class, rules/monitors for Tangible ProV software.
