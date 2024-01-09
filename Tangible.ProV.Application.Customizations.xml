@@ -2,7 +2,7 @@
   <Manifest>
     <Identity>
       <ID>Tangible.ProV.Application.Customizations</ID>
-      <Version>1.0.2.0</Version>
+      <Version>1.0.2.1</Version>
     </Identity>
     <Name>Tangible ProV Application Customizations</Name>
     <References>
@@ -70,7 +70,7 @@
                 </Scheduler>
               </DataSource>
               <ProbeAction ID="PA" TypeID="Windows!Microsoft.Windows.PowerShellPropertyBagProbe">
-                <ScriptName>Tangible.ProV.ProVService.Report.Script.Alert.Rule.Datasource.v10200.ps1</ScriptName>
+                <ScriptName>Tangible.ProV.ProVService.Report.Script.Alert.Rule.Datasource.v10210.ps1</ScriptName>
                 <ScriptBody>
 #=================================================================================
 #  Script to gather Tangible* report data for AD Team
@@ -84,7 +84,7 @@
 #=================================================================================
 # Assign script name variable for use in event logging.
 # ScriptName should be the same as the ID of the module that the script is contained in
-$ScriptName = "Tangible.ProV.ProVService.Report.Script.Alert.Rule.Datasource.v10200.ps1"
+$ScriptName = "Tangible.ProV.ProVService.Report.Script.Alert.Rule.Datasource.v10210.ps1"
 $EventID = "584"
 #=================================================================================
 
@@ -366,7 +366,7 @@ $momapi.LogScriptEvent($ScriptName,$EventID,0,"Script Completed. Script Runtime:
           <Composite>
             <MemberModules>
               <WriteAction ID="PSWA" TypeID="Windows!Microsoft.Windows.PowerShellWriteAction">
-                <ScriptName>Tangible.ProV.ProVService.Report.Script.Alert.Rule.WA.v10200.ps1</ScriptName>
+                <ScriptName>Tangible.ProV.ProVService.Report.Script.Alert.Rule.WA.v10210.ps1</ScriptName>
                 <ScriptBody>
 #=================================================================================
 #  Script to gather Tangible* report data for AD Team
@@ -380,7 +380,7 @@ $momapi.LogScriptEvent($ScriptName,$EventID,0,"Script Completed. Script Runtime:
 #=================================================================================
 # Assign script name variable for use in event logging.
 # ScriptName should be the same as the ID of the module that the script is contained in
-$ScriptName = "Tangible.ProV.ProVService.Report.Script.Alert.Rule.Datasource.v10200.ps1"
+$ScriptName = "Tangible.ProV.ProVService.Report.Script.Alert.Rule.Datasource.v10210.ps1"
 $EventID = "585"
 #=================================================================================
 
@@ -1826,7 +1826,7 @@ $momapi.LogScriptEvent($ScriptName,$EventID,0,"Script Completed. Script Runtime:
       <Recovery ID="Tangible.ProV.ProVService.Service.Recovery" Accessibility="Public" Enabled="true" Target="Tangible.ProV.Seed.Class" Monitor="Tangible.ProV.ProVService.Service.Monitor" ResetMonitor="true" ExecuteOnState="Warning" Remotable="true" Timeout="300">
         <Category>Custom</Category>
 		<WriteAction ID="PSWA" TypeID="Windows!Microsoft.Windows.PowerShellWriteAction">
-		  <ScriptName>Tangible.ProV.ProVService.Service.Recovery.v10200.ps1</ScriptName>
+		  <ScriptName>Tangible.ProV.ProVService.Service.Recovery.v10210.ps1</ScriptName>
 		  <ScriptBody>
 #=================================================================================
 #  Script to restart a service
@@ -1847,7 +1847,7 @@ $momapi.LogScriptEvent($ScriptName,$EventID,0,"Script Completed. Script Runtime:
 # Constants section - modify stuff here:
 #=================================================================================
 # Assign script name variable for use in event logging
-$ScriptName = "Tangible.ProV.ProVService.Service.Recovery.v10200.ps1"
+$ScriptName = "Tangible.ProV.ProVService.Service.Recovery.v10210.ps1"
 $EventID = "3750"
 #=================================================================================
 
@@ -2014,7 +2014,7 @@ write-host "Script Completed. Script Runtime: ($ScriptTime) seconds."
       <Recovery ID="Tangible.ProV.ProVService.Event4402.Service.Recovery" Accessibility="Public" Enabled="false" Target="Tangible.ProV.Seed.Class" Monitor="Tangible.ProV.ProVService.4402.RepeatEvent.Monitor" ResetMonitor="true" ExecuteOnState="Error" Remotable="true" Timeout="300">
         <Category>Custom</Category>
 		<WriteAction ID="PSWA" TypeID="Windows!Microsoft.Windows.PowerShellWriteAction">
-		  <ScriptName>Tangible.ProV.ProVService.Event4402.Service.Recovery.v10200.ps1</ScriptName>
+		  <ScriptName>Tangible.ProV.ProVService.Event4402.Service.Recovery.v10210.ps1</ScriptName>
 		  <ScriptBody>
 #=================================================================================
 #  Script to restart a service
@@ -2035,7 +2035,7 @@ write-host "Script Completed. Script Runtime: ($ScriptTime) seconds."
 # Constants section - modify stuff here:
 #=================================================================================
 # Assign script name variable for use in event logging
-$ScriptName = "Tangible.ProV.ProVService.Event4402.Service.Recovery.v10200.ps1"
+$ScriptName = "Tangible.ProV.ProVService.Event4402.Service.Recovery.v10210.ps1"
 $EventID = "3755"
 #=================================================================================
 
@@ -2226,6 +2226,7 @@ write-host "Script Completed. Script Runtime: ($ScriptTime) seconds."
         <DisplayString ElementID="Tangible.ProV.Application.Customizations">
           <Name>Tangible ProV Application Customizations</Name>
           <Description>
+v1.0.2.1   9 Jan 2024 - Updated 2802 rule name
 v1.0.2.0   5 Jan 2024 - Resolution State logic improvements for large environments, Whitespace audit, Event 2802 rule alert
 v1.0.1.8  18 Jul 2023 - Updated reports to informational, including service not found, found running, toomanyRecovery alerts
 v1.0.1.7  31 Jan 2022 - Updated 4402 event - MatchesRegularExpression and DoesNotMatchRegularExpression monitors
@@ -2282,10 +2283,10 @@ v1.0.0.0   1 Jul 2021 - Created mgmt pack for ProV alerts</Description>
 See further details below: {0}</Description>
         </DisplayString>
 		<DisplayString ElementID="Tangible.ProV.ProVService.Event2802.CouldNotValidateProductKey.Alert.Rule">
-          <Name>Tangible ProV ProVService Report Script Alert Rule</Name>
+          <Name>Tangible ProV ProVService EventID 2802 CouldNotValidateProductKey Alert Rule</Name>
         </DisplayString>
 		<DisplayString ElementID="Tangible.ProV.ProVService.Event2802.CouldNotValidateProductKey.Alert.Rule.AlertMessage">
-          <Name>Tangible ProV ProVService Report Script Alert Task AlertMessage</Name>
+          <Name>Tangible ProV ProVService EventID 2802 CouldNotValidateProductKey</Name>
           <Description>{0}</Description>
         </DisplayString>
 		<DisplayString ElementID="Tangible.ProV.ProVService.Service.ServiceNotFound.Recovery.Rule">
