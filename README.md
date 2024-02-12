@@ -1,5 +1,5 @@
 # TangibleProV
-Tangible ProV Application Customizations v1.0.2.1
+Tangible ProV Application Customizations v1.0.2.3
 
 Download [here](https://github.com/theKevinJustin/TangibleProV/blob/main/Tangible.ProV.Application.Customizations.xml)
 
@@ -11,6 +11,8 @@ Blog [https://kevinjustin.com/blog/2024/01/08/tangible-prov-application-monitori
 
 Version History:
 ```
+v1.0.2.3   9 Feb 2024 - Updated 2802 alert rule for suppression
+v1.0.2.2  11 Jan 2024 - Updated Discovery regkey to SOFTWARE\WOW6432Node\Tangible\ProV
 v1.0.2.1   9 Jan 2024 - Updated 2802 rule name
 v1.0.2.0   5 Jan 2024 - Resolution State logic improvements for large environments, Whitespace audit, Event 2802 rule alert
 v1.0.1.8  18 Jul 2023 - Updated reports to informational, including service not found, found running, toomanyRecovery alerts
