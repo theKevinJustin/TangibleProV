@@ -2,7 +2,7 @@
   <Manifest>
     <Identity>
       <ID>Tangible.ProV.Application.Customizations</ID>
-      <Version>1.0.2.3</Version>
+      <Version>1.0.2.5</Version>
     </Identity>
     <Name>Tangible ProV Application Customizations</Name>
     <References>
@@ -70,7 +70,7 @@
                 </Scheduler>
               </DataSource>
               <ProbeAction ID="PA" TypeID="Windows!Microsoft.Windows.PowerShellPropertyBagProbe">
-                <ScriptName>Tangible.ProV.ProVService.Report.Script.Alert.Rule.Datasource.v10230.ps1</ScriptName>
+                <ScriptName>Tangible.ProV.ProVService.Report.Script.Alert.Rule.Datasource.v10250.ps1</ScriptName>
                 <ScriptBody>
 #=================================================================================
 #  Script to gather Tangible* report data for AD Team
@@ -84,7 +84,7 @@
 #=================================================================================
 # Assign script name variable for use in event logging.
 # ScriptName should be the same as the ID of the module that the script is contained in
-$ScriptName = "Tangible.ProV.ProVService.Report.Script.Alert.Rule.Datasource.v10230.ps1"
+$ScriptName = "Tangible.ProV.ProVService.Report.Script.Alert.Rule.Datasource.v10250.ps1"
 $EventID = "584"
 #=================================================================================
 
@@ -98,7 +98,7 @@ $whoami = whoami
 # Load MOMScript API
 $momapi = New-Object -comObject MOM.ScriptAPI
 #Log script event that we are starting task
-$momapi.LogScriptEvent($ScriptName,$EventID,0,"Script is starting. `n Running as ($whoami).")
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Tangible ProV Report Script is starting. `n Running as ($whoami).")
 #=================================================================================
 
 
@@ -193,12 +193,6 @@ if ( $OpenAlerts.Count -gt 0 )
 	$TProVMessage += "# Auto-closed monitors = $($TotalProVMonitorHistory.Count)"
 	$TProVMessage += "# Auto-closed rules = $($TangibleProVRulesAutoClose.Count)"
 	$TProVMessage += ""
-	$TProVMessage += "# Total automation closures:"
-	$TProVMessage += "#---------------------------"
-	$TProVMessage += "# Auto-closed monitors = $($TotalProVMonitors.Count)"
-	$TProVMessage += "# Auto-closed rules = $($TangibleProVRulesToClose.Count)"
-	$TProVMessage += ""
-	$TProVMessage += ""
 	$TProVMessage += "# Unhealthy Tangible ProV service alert details"
 	$TProVMessage += "#=============================================="
 	$TProVMessage += $OpenAlerts | ft NetBiosComputerName,TimeRaised,RepeatCount,Name -auto
@@ -216,100 +210,6 @@ if ( $OpenAlerts.Count -gt 0 )
 $TProVMessage = $TProVMessage | out-string
 
 $TProVMessage
-
-
-# Rule closure logic
-#=================================================================================
-$momapi.LogScriptEvent($ScriptName,$EventID,0,"Proactive Tangible ProV Application rule reset started for ($date)")
-
-
-if ( $TangibleProVRulesAutoClose.Count -gt 0 )
-	{
-	$TangibleProVRulesAutoClose | Set-SCOMAlert -ResolutionState 255 -Comment "Auto close per Proactive Tangible ProV Application datasource runs M-F"
-	}
-
-# Write event for rule closure
-$momapi.LogScriptEvent($ScriptName,$EventID,0,"Proactive Tangible ProV Application rule reset completed for ($date)")
-
-#=================================================================================
-
-
-#=================================================================================
-# Reset Monitors Script base code modified
-# Put ps1 in mgmtpacks folder
-# https://sc.scomurr.com/scom-2012-monitor-reset-cleaning-up-the-environment/
-#	Download
-# https://gallery.technet.microsoft.com/SCOM-2012-Batch-reset-63a17534
-
-#Alternate
-#https://gallery.technet.microsoft.com/scriptcenter/Auto-reset-script-for-d8b775ca
-
-# Changed up logic to sort unique classes in mgmnt pack families.
-# Added Age variable for monitors thanks to Aris Somatis - $Age specified in top level variables
-# Cycling through monitors made reset loop huge ~650 monitors when only ~50 classes
-# New logic reduced runtime from 8 minutes to roughly 8 seconds
-#=================================================================================
-
-# Write event for rule closure
-$momapi.LogScriptEvent($ScriptName,$EventID,0,"Proactive Tangible ProV Application Monitors reset started for ($date).")
-
-
-# Create Array for all the unhealthy monitors
-$TangibleProVMonitorsToAutoClose = @("Tangible ProV ProVService Service Monitor","Tangible ProV Application Repeated Event","Tangible ProV Application 4402 Repeat Event" )
-# $TangibleProVMonitorsToAutoClose
-
-if ( $OpenAlerts.Count -gt 0 )
-	{
-	foreach ($MonitorDisplayName in $TangibleProVMonitorsToAutoClose)
-		{
-		$Monitors = @(Get-SCOMMonitor -DisplayName $MonitorDisplayName)
-
-		# Set up monitor objects to reset
-		
-		foreach ($Monitor in $Monitors)
-			{
-			$MonitorClass = Get-SCOMClass -Id $Monitor.Target.Id
-			write-host ""
-			write-host "Monitor Class = " + $MonitorClass
-			$ActiveMonitors = Get-SCOMClassInstance -Class $MonitorClass | ? { ($_.healthstate -ne 'Success') -AND ( $_.healthstate -ne 'Uninitialized') -AND ($_.IsAvailable -eq $true) }
-			$UnhealthyMonitors += $ActiveMonitors.Count
-			
-			$ActiveMonitors.Count
-			# $ActiveMonitors | fl -property *
-			write-host "Found" $ActiveMonitors.Count "unhealthy monitors for class" $MonitorClass
-
-			foreach ( $UnhealthyOLDMonitor in $ActiveMonitors )
-				{
-				#if ( $UnhealthyOLDMonitor.AvailabilityLastModified -lt $Age )
-				if ( $UnhealthyOLDMonitor.StateLastModified -lt $Age )
-					{
-					#$UnhealthyMonitors += $ActiveMonitors.Count
-					#UnhealthyOLDMonitor | select AvailabilityLastModified,Path,DisplayName
-					#$UnhealthyOLDMonitor.Count
-					#write-host "Found" + $UnhealthyOLDMonitor.Count + "unhealthy monitor beyond" $Age "days."
-					#write-host ""
-					foreach ($ActiveMonitor in $ActiveMonitors)
-						{
-						write-host " Resetting Health State on '" +$ActiveMonitor.FullName + "'" 
-						$ActiveMonitor.ResetMonitoringState($Monitor.ID)
-						# Debug
-						$ActiveMonitor.ID
-						write-host " Resetting Health State on '" + $ActiveMonitor.FullName + "'" 
-						write-host ""
-						}
-					}
-				}
-			}
-		}
-	# Debug
-	#$MonitorClass | fl -property *
-	#$MonitorClass | select DisplayName,ID
-	}
-
-# Debug Write event for monitor closure
-#=================================================================================
-# Write event for rule closure
-$momapi.LogScriptEvent($ScriptName,$EventID,0,"Proactive Tangible ProV Application monitor reset completed for ($date)")
 
 
 #============================================================
@@ -339,7 +239,7 @@ $bag
 #Log an event for script ending and total execution time.
 $EndTime = Get-Date
 $ScriptTime = ($EndTime - $StartTime).TotalSeconds
-$momapi.LogScriptEvent($ScriptName,$EventID,0,"Script Completed. Script Runtime: ($ScriptTime) seconds.")
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Tangible ProV Report Script Script Completed. Script Runtime: ($ScriptTime) seconds.")
 #=================================================================================
 # End of script
 </ScriptBody>
@@ -355,9 +255,9 @@ $momapi.LogScriptEvent($ScriptName,$EventID,0,"Script Completed. Script Runtime:
         </ModuleImplementation>
         <OutputType>System!System.PropertyBagData</OutputType>
       </DataSourceModuleType>
-      <WriteActionModuleType ID="Tangible.ProV.ProVService.Report.Script.Alert.Rule.WA" Accessibility="Internal" Batching="false">
+      <DataSourceModuleType ID="Tangible.ProV.ProVService.Close.Script.Alert.Rule.Datasource" Accessibility="Internal" Batching="false">
         <Configuration>
-          <xsd:element minOccurs="1" name="TimeoutSeconds" type="xsd:integer" xmlns:xsd="http://www.w3.org/2001/XMLSchema" />
+          <xsd:element minOccurs="1" type="xsd:integer" name="TimeoutSeconds" xmlns:xsd="http://www.w3.org/2001/XMLSchema" />
         </Configuration>
         <OverrideableParameters>
           <OverrideableParameter ID="TimeoutSeconds" Selector="$Config/TimeoutSeconds$" ParameterType="int" />
@@ -365,8 +265,22 @@ $momapi.LogScriptEvent($ScriptName,$EventID,0,"Script Completed. Script Runtime:
         <ModuleImplementation Isolation="Any">
           <Composite>
             <MemberModules>
-              <WriteAction ID="PSWA" TypeID="Windows!Microsoft.Windows.PowerShellWriteAction">
-                <ScriptName>Tangible.ProV.ProVService.Report.Script.Alert.Rule.WA.v10230.ps1</ScriptName>
+              <DataSource ID="Scheduler" TypeID="System!System.Scheduler">
+                <Scheduler>
+                  <WeeklySchedule>
+                    <Windows>
+                      <Daily>
+                        <Start>06:09</Start>
+                        <End>06:39</End>
+                        <DaysOfWeekMask>62</DaysOfWeekMask>
+                      </Daily>
+                    </Windows>
+                  </WeeklySchedule>
+                  <ExcludeDates />
+                </Scheduler>
+              </DataSource>
+              <ProbeAction ID="PA" TypeID="Windows!Microsoft.Windows.PowerShellPropertyBagProbe">
+                <ScriptName>Tangible.ProV.ProVService.Close.Script.Alert.Rule.Datasource.v10250.ps1</ScriptName>
                 <ScriptBody>
 #=================================================================================
 #  Script to gather Tangible* report data for AD Team
@@ -380,7 +294,285 @@ $momapi.LogScriptEvent($ScriptName,$EventID,0,"Script Completed. Script Runtime:
 #=================================================================================
 # Assign script name variable for use in event logging.
 # ScriptName should be the same as the ID of the module that the script is contained in
-$ScriptName = "Tangible.ProV.ProVService.Report.Script.Alert.Rule.Datasource.v10230.ps1"
+$ScriptName = "Tangible.ProV.ProVService.Close.Script.Alert.Rule.Datasource.v10250.ps1"
+$EventID = "584"
+#=================================================================================
+
+
+# Starting Script section - All scripts get this
+#=================================================================================
+# Gather the start time of the script
+$StartTime = Get-Date
+#Set variable to be used in logging events
+$whoami = whoami
+# Load MOMScript API
+$momapi = New-Object -comObject MOM.ScriptAPI
+#Log script event that we are starting task
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Tangible ProV Close Script is starting. `n Running as ($whoami).")
+#=================================================================================
+
+
+# PropertyBag Script section - Monitoring scripts get this
+#=================================================================================
+# Load SCOM PropertyBag function
+$bag = $momapi.CreatePropertyBag()
+#=================================================================================
+
+
+# Begin MAIN script section
+#=================================================================================
+
+#For a simple example - get files in Windows Temp:
+$date = get-date -uFormat "%Y-%m-%d"
+$Age = [DateTime](Get-Date).AddDays(-1)
+
+# Grab past 24 hours
+if ( (get-date).DayOfWeek -ne "Monday" )
+	{
+	$Time = [DateTime](Get-Date).AddDays(-1)
+	}
+if ( (get-date).DayOfWeek -eq "Monday" )
+	{
+	$Time = [DateTime](Get-Date).AddDays(-3)
+	}
+
+
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Gather Tangible ProVService Alerts to close for date ($date).")
+
+$DSMessage = "Proactive Tangible ProVService Alerts to close for date ($date)."
+
+#
+# Clean up old reports
+#===============================================
+$OpenAlerts = get-scomalert -ResolutionState (0..254) -Name "Tangible ProV ProVService Service*"
+# $OpenAlerts.count
+
+# Gather Tangible alerts packs and put into array
+#=================================================================================
+$TangibleMgmtPackArray = @()
+
+$TangibleMgmtPackArray += "Tangible ProV Application Customizations"
+
+
+## Grab the MP, get the Monitors and Rules from the MP, then grab all alerts found inside the Monitors/Rules
+#=================================================================================
+$SCOMCoreMP = @()
+$SCOMCoreRules = @()
+$SCOMCoreMonitors = @()
+
+foreach ( $pack in $TangibleMgmtPackArray )
+	{
+	$SCOMCoreMP += Get-SCOMManagementPack -DisplayName $pack
+
+	$SCOMCoreRules += $SCOMCoreMP.GetRules()
+	$SCOMCoreMonitors += $SCOMCoreMP.GetMonitors()
+	}
+
+$SCOMCoreMonitors.Count
+
+
+#
+# List rules to close
+
+$TangibleProVRulesToClose = @()
+
+
+$TangibleProVRulesToClose = get-scomalert -ResolutionState (0..254) -Name "Tangible ProV ProVService Service*"
+# $TangibleProVRulesToClose.Count
+
+$TangibleProVRulesAutoClose = $TangibleProVRulesToClose | ? { $_.TimeRaised -gt $Time }
+# $TangibleProVRulesAutoClose.Count
+
+
+# Set up array for unhealthy agent report
+$TProVMessage = @()
+
+if ( $OpenAlerts.Count -eq 0 )
+	{
+	$TProVMessage += "ZERO Tangible ProVService alerts for date ($date)."
+	}
+
+if ( $OpenAlerts.Count -gt 0 )
+	{
+	$TProVMessage += ""
+	$TProVMessage += $DSMessage
+	$TProVMessage += ""
+	$TProVMessage += "# Open ProV alerts closed with automation = $($OpenAlerts.Count)"
+	$TProVMessage += ""
+	}
+
+# $TProVMessage
+
+$TProVMessage = $TProVMessage | out-string
+
+$TProVMessage
+
+
+# Rule closure logic
+#=================================================================================
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Proactive Tangible ProV Application rule reset started for ($date)")
+
+
+if ( $TangibleProVRulesAutoClose.Count -gt 0 )
+	{
+	$TangibleProVRulesAutoClose | Set-SCOMAlert -ResolutionState 255 -Comment "Auto close per Proactive Tangible ProV Application datasource runs M-F"
+	}
+
+# Write event for rule closure
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Proactive Tangible ProV Application rule reset completed for ($date)")
+
+#=================================================================================
+
+
+#=================================================================================
+# Reset Monitors Script base code modified
+# Put ps1 in mgmtpacks folder
+# https://sc.scomurr.com/scom-2012-monitor-reset-cleaning-up-the-environment/
+#	Download
+# https://gallery.technet.microsoft.com/SCOM-2012-Batch-reset-63a17534
+
+#Alternate
+#https://gallery.technet.microsoft.com/scriptcenter/Auto-reset-script-for-d8b775ca
+
+# Changed up logic to sort unique classes in mgmnt pack families.
+# Added Age variable for monitors thanks to Aris Somatis - $Age specified in top level variables
+# Cycling through monitors made reset loop huge ~650 monitors when only ~50 classes
+# New logic reduced runtime from 8 minutes to roughly 8 seconds
+#=================================================================================
+
+# Write event for rule closure
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Proactive Tangible ProV Application Monitors reset started for ($date).")
+
+
+if ( $OpenAlerts.Count -gt 0 )
+	{
+	# Tangible pack naming
+	$TangibleClasses = @(Get-SCOMClass -Name "Tangible.ProV.Seed.Class" )
+	$TangibleClass = $TangibleClasses | sort -property Name -uniq
+	# Debug
+	# $TangibleClass.Count
+
+	# Set up monitor objects to reset
+	foreach ($Class in $TangibleClass)
+		{
+		$ActiveMonitors = @(Get-SCOMClassInstance -Class $Class | ? { ($_.healthstate -ne 'Success') -AND ( $_.healthstate -ne 'Uninitialized') -AND ($_.IsAvailable -eq $true) } )
+		# Debug
+		$ActiveMonitors.Count
+		# $ActiveMonitors | fl -property *
+		write-host "Found" $ActiveMonitors.Count "unhealthy monitors for class" $Class
+		foreach ( $UnhealthyOLDMonitor in $ActiveMonitors )
+			{
+			#if ( $UnhealthyOLDMonitor.AvailabilityLastModified -lt $Age )
+			if ( $UnhealthyOLDMonitor.StateLastModified -lt $Age )
+				{
+				#$UnhealthyMonitors += $ActiveMonitors.Count					
+				#UnhealthyOLDMonitor | select AvailabilityLastModified,Path,DisplayName
+				#$UnhealthyOLDMonitor.Count
+				#write-host "Found" + $UnhealthyOLDMonitor.Count + "unhealthy monitor beyond" $Age "days."
+				#write-host ""
+				if ( $ActiveMonitors.Count -gt 0)
+					{
+					foreach ( $ActiveMonitor in $UnhealthyOLDMonitor )
+						{
+						# Debug
+						#$ActiveMonitor.ID
+						$ActiveMonitor
+						write-host " Resetting Health State on '" + $ActiveMonitor.FullName + "'" 
+						write-host ""
+						$ActiveMonitor.ResetMonitoringState($ActiveMonitor.ID)
+						}
+					}
+				}
+			}
+		}
+	# Debug
+	#$MonitorClass | fl -property *
+	#$MonitorClass | select DisplayName,ID
+	}
+
+
+# Debug Write event for rule closure
+# $UnhealthyMonitors = $($UnhealthyMonitors | measure-object -sum).sum
+# Write event for rule closure
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Proactive DailyTasks Tangible ProVServices monitor reset automation completed for ($date)")
+
+
+# Debug Write event for monitor closure
+#=================================================================================
+# Write event for rule closure
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Proactive Tangible ProV Application monitor reset completed for ($date)")
+
+
+#============================================================
+# Tally up all the property bags for datasource
+
+$Result = "GOOD"
+
+# Log
+$Summary = "$TProVMessage `n `nDisclaimer:  This daily summary report is to document the manual tasks used by NOSC to check AD and AD Replication health, Pending Reboot Report, Logical Disk errors,Expiring Certificates, Unhealthy Server/Agents, Unhealthy agent workflow/script alerts, and Servers in Maintenance Mode"
+
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"$TProVMessage`n `nDisclaimer:  This daily summary report is to document the manual tasks used by NOSC to check AD and AD Replication health, Pending Reboot Report, Logical Disk errors,Expiring Certificates, Unhealthy Server/Agents, Unhealthy agent workflow/script alerts, and Servers in Maintenance Mode")
+
+  $bag.AddValue('Message',$DSMessage)
+  $bag.AddValue('Summary',$Summary)
+
+
+# Return all bags
+$bag
+
+
+#=================================================================================
+# End MAIN script section
+
+
+# End of script section
+#=================================================================================
+#Log an event for script ending and total execution time.
+$EndTime = Get-Date
+$ScriptTime = ($EndTime - $StartTime).TotalSeconds
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Tangible ProV Close Script Completed. Script Runtime: ($ScriptTime) seconds.")
+#=================================================================================
+# End of script
+</ScriptBody>
+                <TimeoutSeconds>$Config/TimeoutSeconds$</TimeoutSeconds>
+              </ProbeAction>
+            </MemberModules>
+            <Composition>
+              <Node ID="PA">
+                <Node ID="Scheduler" />
+              </Node>
+            </Composition>
+          </Composite>
+        </ModuleImplementation>
+        <OutputType>System!System.PropertyBagData</OutputType>
+      </DataSourceModuleType>
+
+      <WriteActionModuleType ID="Tangible.ProV.ProVService.Report.Script.Alert.Rule.WA" Accessibility="Internal" Batching="false">
+        <Configuration>
+          <xsd:element minOccurs="1" name="TimeoutSeconds" type="xsd:integer" xmlns:xsd="http://www.w3.org/2001/XMLSchema" />
+        </Configuration>
+        <OverrideableParameters>
+          <OverrideableParameter ID="TimeoutSeconds" Selector="$Config/TimeoutSeconds$" ParameterType="int" />
+        </OverrideableParameters>
+        <ModuleImplementation Isolation="Any">
+          <Composite>
+            <MemberModules>
+              <WriteAction ID="PSWA" TypeID="Windows!Microsoft.Windows.PowerShellWriteAction">
+                <ScriptName>Tangible.ProV.ProVService.Report.Script.Alert.Rule.WA.v10250.ps1</ScriptName>
+                <ScriptBody>
+#=================================================================================
+#  Script to gather Tangible* report data for AD Team
+#
+#  Author: Kevin Justin
+#  v1.0
+#=================================================================================
+
+
+# Constants section - modify stuff here:
+#=================================================================================
+# Assign script name variable for use in event logging.
+# ScriptName should be the same as the ID of the module that the script is contained in
+$ScriptName = "Tangible.ProV.ProVService.Report.Script.Alert.Rule.WA.v10250.ps1"
 $EventID = "585"
 #=================================================================================
 
@@ -394,7 +586,7 @@ $whoami = whoami
 # Load MOMScript API
 $momapi = New-Object -comObject MOM.ScriptAPI
 #Log script event that we are starting task
-$momapi.LogScriptEvent($ScriptName,$EventID,0,"Script is starting. `n Running as ($whoami).")
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Tangible ProV Report Script is starting. `n Running as ($whoami).")
 #=================================================================================
 
 
@@ -489,12 +681,6 @@ if ( $OpenAlerts.Count -gt 0 )
 	$TProVMessage += "# Auto-closed monitors = $($TotalProVMonitorHistory.Count)"
 	$TProVMessage += "# Auto-closed rules = $($TangibleProVRulesAutoClose.Count)"
 	$TProVMessage += ""
-	$TProVMessage += "# Total automation closures:"
-	$TProVMessage += "#---------------------------"
-	$TProVMessage += "# Auto-closed monitors = $($TotalProVMonitors.Count)"
-	$TProVMessage += "# Auto-closed rules = $($TangibleProVRulesToClose.Count)"
-	$TProVMessage += ""
-	$TProVMessage += ""
 	$TProVMessage += "# Unhealthy Tangible ProV service alert details"
 	$TProVMessage += "#=============================================="
 	$TProVMessage += $OpenAlerts | ft NetBiosComputerName,TimeRaised,RepeatCount,Name -auto
@@ -504,6 +690,187 @@ if ( $OpenAlerts.Count -gt 0 )
 	$TProVMessage += "#=============================================="
 	$TProVMessage += $ClosedAlerts | sort -property NetBiosComputerName | sort -property RepeatCount -desc | ft NetBiosComputerName,TimeRaised,RepeatCount,Name -auto
 	$TProVMessage += "#=============================================="
+	$TProVMessage += ""
+	}
+
+# $TProVMessage
+
+$TProVMessage = $TProVMessage | out-string
+
+$TProVMessage
+
+
+#============================================================
+# Tally up all the property bags for datasource
+
+$Result = "GOOD"
+
+# Log
+$Summary = "$TProVMessage `n `nDisclaimer:  This daily summary report is to document the manual tasks used by NOSC to check AD and AD Replication health, Pending Reboot Report, Logical Disk errors,Expiring Certificates, Unhealthy Server/Agents, Unhealthy agent workflow/script alerts, and Servers in Maintenance Mode"
+
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"$TProVMessage`n `nDisclaimer:  This daily summary report is to document the manual tasks used by NOSC to check AD and AD Replication health, Pending Reboot Report, Logical Disk errors,Expiring Certificates, Unhealthy Server/Agents, Unhealthy agent workflow/script alerts, and Servers in Maintenance Mode")
+
+  $bag.AddValue('Message',$DSMessage)
+  $bag.AddValue('Summary',$Summary)
+
+
+# Return all bags
+$bag
+
+
+#=================================================================================
+# End MAIN script section
+
+
+# End of script section
+#=================================================================================
+#Log an event for script ending and total execution time.
+$EndTime = Get-Date
+$ScriptTime = ($EndTime - $StartTime).TotalSeconds
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Tangible ProV Report Script Script Completed. Script Runtime: ($ScriptTime) seconds.")
+#=================================================================================
+# End of script
+                </ScriptBody>
+                <TimeoutSeconds>$Config/TimeoutSeconds$</TimeoutSeconds>
+              </WriteAction>
+            </MemberModules>
+            <Composition>
+              <Node ID="PSWA" />
+            </Composition>
+          </Composite>
+        </ModuleImplementation>
+        <OutputType>System!System.BaseData</OutputType>
+        <InputType>System!System.BaseData</InputType>
+      </WriteActionModuleType>
+      <WriteActionModuleType ID="Tangible.ProV.ProVService.Close.Script.Alert.Rule.WA" Accessibility="Internal" Batching="false">
+        <Configuration>
+          <xsd:element minOccurs="1" name="TimeoutSeconds" type="xsd:integer" xmlns:xsd="http://www.w3.org/2001/XMLSchema" />
+        </Configuration>
+        <OverrideableParameters>
+          <OverrideableParameter ID="TimeoutSeconds" Selector="$Config/TimeoutSeconds$" ParameterType="int" />
+        </OverrideableParameters>
+        <ModuleImplementation Isolation="Any">
+          <Composite>
+            <MemberModules>
+              <WriteAction ID="PSWA" TypeID="Windows!Microsoft.Windows.PowerShellWriteAction">
+                <ScriptName>Tangible.ProV.ProVService.Close.Script.Alert.Rule.WA.v10250.ps1</ScriptName>
+                <ScriptBody>
+#=================================================================================
+#  Script to gather Tangible* report data for AD Team
+#
+#  Author: Kevin Justin
+#  v1.0
+#=================================================================================
+
+
+# Constants section - modify stuff here:
+#=================================================================================
+# Assign script name variable for use in event logging.
+# ScriptName should be the same as the ID of the module that the script is contained in
+$ScriptName = "Tangible.ProV.ProVService.Close.Script.Alert.Rule.WA.v10250.ps1"
+$EventID = "585"
+#=================================================================================
+
+
+# Starting Script section - All scripts get this
+#=================================================================================
+# Gather the start time of the script
+$StartTime = Get-Date
+#Set variable to be used in logging events
+$whoami = whoami
+# Load MOMScript API
+$momapi = New-Object -comObject MOM.ScriptAPI
+#Log script event that we are starting task
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Tangible ProV Close Script is starting. `n Running as ($whoami).")
+#=================================================================================
+
+
+# PropertyBag Script section - Monitoring scripts get this
+#=================================================================================
+# Load SCOM PropertyBag function
+$bag = $momapi.CreatePropertyBag()
+#=================================================================================
+
+
+# Begin MAIN script section
+#=================================================================================
+
+#For a simple example - get files in Windows Temp:
+$date = get-date -uFormat "%Y-%m-%d"
+$Age = [DateTime](Get-Date).AddDays(-1)
+
+# Grab past 24 hours
+if ( (get-date).DayOfWeek -ne "Monday" )
+	{
+	$Time = [DateTime](Get-Date).AddDays(-1)
+	}
+if ( (get-date).DayOfWeek -eq "Monday" )
+	{
+	$Time = [DateTime](Get-Date).AddDays(-3)
+	}
+
+
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Gather Tangible ProVService Alerts to close for date ($date).")
+
+$DSMessage = "Proactive Tangible ProVService Alerts to close for date ($date)."
+
+#
+# Clean up old reports
+#===============================================
+$OpenAlerts = get-scomalert -ResolutionState (0..254) -Name "Tangible ProV ProVService Service*"
+# $OpenAlerts.count
+
+# Gather Tangible alerts packs and put into array
+#=================================================================================
+$TangibleMgmtPackArray = @()
+
+$TangibleMgmtPackArray += "Tangible ProV Application Customizations"
+
+
+## Grab the MP, get the Monitors and Rules from the MP, then grab all alerts found inside the Monitors/Rules
+#=================================================================================
+$SCOMCoreMP = @()
+$SCOMCoreRules = @()
+$SCOMCoreMonitors = @()
+
+foreach ( $pack in $TangibleMgmtPackArray )
+	{
+	$SCOMCoreMP += Get-SCOMManagementPack -DisplayName $pack
+
+	$SCOMCoreRules += $SCOMCoreMP.GetRules()
+	$SCOMCoreMonitors += $SCOMCoreMP.GetMonitors()
+	}
+
+$SCOMCoreMonitors.Count
+
+
+#
+# List rules to close
+
+$TangibleProVRulesToClose = @()
+
+
+$TangibleProVRulesToClose = get-scomalert -ResolutionState (0..254) -Name "Tangible ProV ProVService Service*"
+# $TangibleProVRulesToClose.Count
+
+$TangibleProVRulesAutoClose = $TangibleProVRulesToClose | ? { $_.TimeRaised -gt $Time }
+# $TangibleProVRulesAutoClose.Count
+
+
+# Set up array for unhealthy agent report
+$TProVMessage = @()
+
+if ( $OpenAlerts.Count -eq 0 )
+	{
+	$TProVMessage += "ZERO Tangible ProVService alerts for date ($date)."
+	}
+
+if ( $OpenAlerts.Count -gt 0 )
+	{
+	$TProVMessage += ""
+	$TProVMessage += $DSMessage
+	$TProVMessage += ""
+	$TProVMessage += "# Open ProV alerts closed with automation = $($OpenAlerts.Count)"
 	$TProVMessage += ""
 	}
 
@@ -550,48 +917,42 @@ $momapi.LogScriptEvent($ScriptName,$EventID,0,"Proactive Tangible ProV Applicati
 $momapi.LogScriptEvent($ScriptName,$EventID,0,"Proactive Tangible ProV Application Monitors reset started for ($date).")
 
 
-# Create Array for all the unhealthy monitors
-$TangibleProVMonitorsToAutoClose = @("Tangible ProV ProVService Service Monitor","Tangible ProV Application Repeated Event","Tangible ProV Application 4402 Repeat Event" )
-# $TangibleProVMonitorsToAutoClose
-
 if ( $OpenAlerts.Count -gt 0 )
 	{
-	foreach ($MonitorDisplayName in $TangibleProVMonitorsToAutoClose)
+	# Tangible pack naming
+	$TangibleClasses = @(Get-SCOMClass -Name "Tangible.ProV.Seed.Class" )
+	$TangibleClass = $TangibleClasses | sort -property Name -uniq
+	# Debug
+	# $TangibleClass.Count
+
+	# Set up monitor objects to reset
+	foreach ($Class in $TangibleClass)
 		{
-		$Monitors = @(Get-SCOMMonitor -DisplayName $MonitorDisplayName)
-
-		# Set up monitor objects to reset
-		
-		foreach ($Monitor in $Monitors)
+		$ActiveMonitors = @(Get-SCOMClassInstance -Class $Class | ? { ($_.healthstate -ne 'Success') -AND ( $_.healthstate -ne 'Uninitialized') -AND ($_.IsAvailable -eq $true) } )
+		# Debug
+		$ActiveMonitors.Count
+		# $ActiveMonitors | fl -property *
+		write-host "Found" $ActiveMonitors.Count "unhealthy monitors for class" $Class
+		foreach ( $UnhealthyOLDMonitor in $ActiveMonitors )
 			{
-			$MonitorClass = Get-SCOMClass -Id $Monitor.Target.Id
-			write-host ""
-			write-host "Monitor Class = " + $MonitorClass
-			$ActiveMonitors = Get-SCOMClassInstance -Class $MonitorClass | ? { ($_.healthstate -ne 'Success') -AND ( $_.healthstate -ne 'Uninitialized') -AND ($_.IsAvailable -eq $true) }
-			$UnhealthyMonitors += $ActiveMonitors.Count
-			
-			$ActiveMonitors.Count
-			# $ActiveMonitors | fl -property *
-			write-host "Found" $ActiveMonitors.Count "unhealthy monitors for class" $MonitorClass
-
-			foreach ( $UnhealthyOLDMonitor in $ActiveMonitors )
+			#if ( $UnhealthyOLDMonitor.AvailabilityLastModified -lt $Age )
+			if ( $UnhealthyOLDMonitor.StateLastModified -lt $Age )
 				{
-				#if ( $UnhealthyOLDMonitor.AvailabilityLastModified -lt $Age )
-				if ( $UnhealthyOLDMonitor.StateLastModified -lt $Age )
+				#$UnhealthyMonitors += $ActiveMonitors.Count					
+				#UnhealthyOLDMonitor | select AvailabilityLastModified,Path,DisplayName
+				#$UnhealthyOLDMonitor.Count
+				#write-host "Found" + $UnhealthyOLDMonitor.Count + "unhealthy monitor beyond" $Age "days."
+				#write-host ""
+				if ( $ActiveMonitors.Count -gt 0)
 					{
-					#$UnhealthyMonitors += $ActiveMonitors.Count
-					#UnhealthyOLDMonitor | select AvailabilityLastModified,Path,DisplayName
-					#$UnhealthyOLDMonitor.Count
-					#write-host "Found" + $UnhealthyOLDMonitor.Count + "unhealthy monitor beyond" $Age "days."
-					#write-host ""
-					foreach ($ActiveMonitor in $ActiveMonitors)
+					foreach ( $ActiveMonitor in $UnhealthyOLDMonitor )
 						{
-						write-host " Resetting Health State on '" +$ActiveMonitor.FullName + "'" 
-						$ActiveMonitor.ResetMonitoringState($Monitor.ID)
 						# Debug
-						$ActiveMonitor.ID
+						#$ActiveMonitor.ID
+						$ActiveMonitor
 						write-host " Resetting Health State on '" + $ActiveMonitor.FullName + "'" 
 						write-host ""
+						$ActiveMonitor.ResetMonitoringState($ActiveMonitor.ID)
 						}
 					}
 				}
@@ -601,6 +962,13 @@ if ( $OpenAlerts.Count -gt 0 )
 	#$MonitorClass | fl -property *
 	#$MonitorClass | select DisplayName,ID
 	}
+
+
+# Debug Write event for rule closure
+# $UnhealthyMonitors = $($UnhealthyMonitors | measure-object -sum).sum
+# Write event for rule closure
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Proactive DailyTasks Tangible ProVServices monitor reset automation completed for ($date)")
+
 
 # Debug Write event for monitor closure
 #=================================================================================
@@ -635,7 +1003,7 @@ $bag
 #Log an event for script ending and total execution time.
 $EndTime = Get-Date
 $ScriptTime = ($EndTime - $StartTime).TotalSeconds
-$momapi.LogScriptEvent($ScriptName,$EventID,0,"Script Completed. Script Runtime: ($ScriptTime) seconds.")
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Tangible ProV Close Script Completed. Script Runtime: ($ScriptTime) seconds.")
 #=================================================================================
 # End of script
                 </ScriptBody>
@@ -1678,11 +2046,96 @@ $momapi.LogScriptEvent($ScriptName,$EventID,0,"Script Completed. Script Runtime:
           </WriteAction>
         </WriteActions>
       </Rule>
+      <Rule ID="Tangible.ProV.ProVService.Close.Script.Alert.Rule" Enabled="true" Target="SC!Microsoft.SystemCenter.AllManagementServersPool" ConfirmDelivery="true" Remotable="true" Priority="Normal" DiscardLevel="100">
+        <Category>Alert</Category>
+        <DataSources>
+          <DataSource ID="DS" TypeID="Tangible.ProV.ProVService.Close.Script.Alert.Rule.Datasource">
+            <TimeoutSeconds>600</TimeoutSeconds>
+          </DataSource>
+        </DataSources>
+        <WriteActions>
+          <WriteAction ID="WA" TypeID="Health!System.Health.GenerateAlert">
+            <Priority>1</Priority>
+            <Severity>0</Severity>
+            <AlertMessageId>$MPElement[Name="Tangible.ProV.ProVService.Close.Script.Alert.Rule.AlertMessage"]$</AlertMessageId>
+            <AlertParameters>
+              <AlertParameter1>$Data/Property[@Name='Message']$</AlertParameter1>
+              <AlertParameter2>$Data/Property[@Name='Summary']$</AlertParameter2>
+            </AlertParameters>
+            <Suppression>
+              <SuppressionValue>$Data/Property[@Name='Message']$</SuppressionValue>
+            </Suppression>
+          </WriteAction>
+        </WriteActions>
+      </Rule>
+      <Rule ID="Tangible.ProV.ProVService.Close.Script.Task.Alert.Rule" Enabled="true" Target="SC!Microsoft.SystemCenter.AllManagementServersPool" ConfirmDelivery="true" Remotable="true" Priority="Normal" DiscardLevel="100">
+        <Category>Alert</Category>
+        <DataSources>
+          <DataSource ID="DS" TypeID="Windows!Microsoft.Windows.EventProvider">
+            <LogName>Operations Manager</LogName>
+            <Expression>
+              <And>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="UnsignedInteger">EventDisplayNumber</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="UnsignedInteger">585</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">PublisherName</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="String">Health Service Script</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+                <Expression>
+                  <RegExExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">EventDescription</XPathQuery>
+                    </ValueExpression>
+                    <Operator>ContainsSubstring</Operator>
+                    <Pattern>Proactive Tangible ProVService Alerts to close for date</Pattern>
+                  </RegExExpression>
+                </Expression>
+              </And>
+            </Expression>
+          </DataSource>
+        </DataSources>
+        <WriteActions>
+          <WriteAction ID="Alert" TypeID="Health!System.Health.GenerateAlert">
+            <Priority>1</Priority>
+            <Severity>0</Severity>
+            <AlertName />
+            <AlertDescription />
+            <AlertOwner />
+            <AlertMessageId>$MPElement[Name="Tangible.ProV.ProVService.Close.Script.Task.Alert.Rule.AlertMessage"]$</AlertMessageId>
+            <AlertParameters>
+              <AlertParameter1>$Data/EventDescription$</AlertParameter1>
+            </AlertParameters>
+            <Suppression />
+          </WriteAction>
+        </WriteActions>
+      </Rule>
     </Rules>
     <Tasks>
       <Task ID="Tangible.ProV.ProVService.Report.Script.Task" Accessibility="Public" Enabled="true" Target="SC!Microsoft.SystemCenter.AllManagementServersPool" Timeout="120" Remotable="true">
         <Category>Custom</Category>
         <WriteAction ID="PSWA" TypeID="Tangible.ProV.ProVService.Report.Script.Alert.Rule.WA">
+          <TimeoutSeconds>300</TimeoutSeconds>
+        </WriteAction>
+      </Task>
+      <Task ID="Tangible.ProV.ProVService.Close.Script.Task" Accessibility="Public" Enabled="true" Target="SC!Microsoft.SystemCenter.AllManagementServersPool" Timeout="120" Remotable="true">
+        <Category>Custom</Category>
+        <WriteAction ID="PSWA" TypeID="Tangible.ProV.ProVService.Close.Script.Alert.Rule.WA">
           <TimeoutSeconds>300</TimeoutSeconds>
         </WriteAction>
       </Task>
@@ -1830,7 +2283,7 @@ $momapi.LogScriptEvent($ScriptName,$EventID,0,"Script Completed. Script Runtime:
       <Recovery ID="Tangible.ProV.ProVService.Service.Recovery" Accessibility="Public" Enabled="true" Target="Tangible.ProV.Seed.Class" Monitor="Tangible.ProV.ProVService.Service.Monitor" ResetMonitor="true" ExecuteOnState="Warning" Remotable="true" Timeout="300">
         <Category>Custom</Category>
 		<WriteAction ID="PSWA" TypeID="Windows!Microsoft.Windows.PowerShellWriteAction">
-		  <ScriptName>Tangible.ProV.ProVService.Service.Recovery.v10230.ps1</ScriptName>
+		  <ScriptName>Tangible.ProV.ProVService.Service.Recovery.v10250.ps1</ScriptName>
 		  <ScriptBody>
 #=================================================================================
 #  Script to restart a service
@@ -1851,7 +2304,7 @@ $momapi.LogScriptEvent($ScriptName,$EventID,0,"Script Completed. Script Runtime:
 # Constants section - modify stuff here:
 #=================================================================================
 # Assign script name variable for use in event logging
-$ScriptName = "Tangible.ProV.ProVService.Service.Recovery.v10230.ps1"
+$ScriptName = "Tangible.ProV.ProVService.Service.Recovery.v10250.ps1"
 $EventID = "3750"
 #=================================================================================
 
@@ -2018,7 +2471,7 @@ write-host "Script Completed. Script Runtime: ($ScriptTime) seconds."
       <Recovery ID="Tangible.ProV.ProVService.Event4402.Service.Recovery" Accessibility="Public" Enabled="false" Target="Tangible.ProV.Seed.Class" Monitor="Tangible.ProV.ProVService.4402.RepeatEvent.Monitor" ResetMonitor="true" ExecuteOnState="Error" Remotable="true" Timeout="300">
         <Category>Custom</Category>
 		<WriteAction ID="PSWA" TypeID="Windows!Microsoft.Windows.PowerShellWriteAction">
-		  <ScriptName>Tangible.ProV.ProVService.Event4402.Service.Recovery.v10230.ps1</ScriptName>
+		  <ScriptName>Tangible.ProV.ProVService.Event4402.Service.Recovery.v10250.ps1</ScriptName>
 		  <ScriptBody>
 #=================================================================================
 #  Script to restart a service
@@ -2039,7 +2492,7 @@ write-host "Script Completed. Script Runtime: ($ScriptTime) seconds."
 # Constants section - modify stuff here:
 #=================================================================================
 # Assign script name variable for use in event logging
-$ScriptName = "Tangible.ProV.ProVService.Event4402.Service.Recovery.v10230.ps1"
+$ScriptName = "Tangible.ProV.ProVService.Event4402.Service.Recovery.v10250.ps1"
 $EventID = "3755"
 #=================================================================================
 
@@ -2222,6 +2675,8 @@ write-host "Script Completed. Script Runtime: ($ScriptTime) seconds."
 	  <StringResource ID="Tangible.ProV.ProVService.Report.Script.Alert.Rule.AlertMessage" />
 	  <StringResource ID="Tangible.ProV.ProVService.Report.Script.Task.Alert.Rule.AlertMessage" />
 	  <StringResource ID="Tangible.ProV.ProVService.Event2802.CouldNotValidateProductKey.Alert.Rule.AlertMessage" />
+	  <StringResource ID="Tangible.ProV.ProVService.Close.Script.Alert.Rule.AlertMessage" />
+	  <StringResource ID="Tangible.ProV.ProVService.Close.Script.Task.Alert.Rule.AlertMessage" />
     </StringResources>
   </Presentation>
   <LanguagePacks>
@@ -2230,6 +2685,7 @@ write-host "Script Completed. Script Runtime: ($ScriptTime) seconds."
         <DisplayString ElementID="Tangible.ProV.Application.Customizations">
           <Name>Tangible ProV Application Customizations</Name>
           <Description>
+v1.0.2.5  12 Nov 2024 - Created close workflows separate from report
 v1.0.2.3   9 Feb 2024 - Updated 2802 alert rule for suppression
 v1.0.2.2  11 Jan 2024 - Updated Discovery regkey to SOFTWARE\WOW6432Node\Tangible\ProV
 v1.0.2.1   9 Jan 2024 - Updated 2802 rule name
@@ -2255,9 +2711,15 @@ v1.0.0.0   1 Jul 2021 - Created mgmt pack for ProV alerts</Description>
 		<DisplayString ElementID="Tangible.ProV.ProVService.Report.Script.Alert.Rule.Datasource">
           <Name>Tangible ProV ProVService Report Script Alert Rule Datasource</Name>
         </DisplayString>
+		<DisplayString ElementID="Tangible.ProV.ProVService.Close.Script.Alert.Rule.Datasource">
+          <Name>Tangible ProV ProVService Close Script Alert Rule Datasource</Name>
+        </DisplayString>
 
 		<DisplayString ElementID="Tangible.ProV.ProVService.Report.Script.Alert.Rule.WA">
           <Name>Tangible ProV ProVService Report Script Alert Rule WA</Name>
+        </DisplayString>
+		<DisplayString ElementID="Tangible.ProV.ProVService.Close.Script.Alert.Rule.WA">
+          <Name>Tangible ProV ProVService Close Script Alert Rule WA</Name>
         </DisplayString>
 
         <DisplayString ElementID="Tangible.ProV.ProVService.Monitor.MonitorType">
@@ -2269,9 +2731,7 @@ v1.0.0.0   1 Jul 2021 - Created mgmt pack for ProV alerts</Description>
         </DisplayString>
         <DisplayString ElementID="Tangible.ProV.ProVService.Report.Script.Alert.Rule.AlertMessage">
           <Name>Tangible ProV ProVService Report Script Alert Rule AlertMessage</Name>
-          <Description>{0}
-
-{1}</Description>
+          <Description>{1}</Description>
 	    </DisplayString>
         <DisplayString ElementID="Tangible.ProV.ProVService.Report.Script.Task.Alert.Rule">
           <Name>Tangible ProV ProVService Report Script Task Alert Rule</Name>
@@ -2280,6 +2740,21 @@ v1.0.0.0   1 Jul 2021 - Created mgmt pack for ProV alerts</Description>
           <Name>Tangible ProV ProVService Report Script Alert Task AlertMessage</Name>
           <Description>{0}</Description>
         </DisplayString>
+        <DisplayString ElementID="Tangible.ProV.ProVService.Close.Script.Alert.Rule">
+          <Name>Tangible ProV ProVService Close Script Alert Rule</Name>
+        </DisplayString>
+        <DisplayString ElementID="Tangible.ProV.ProVService.Close.Script.Alert.Rule.AlertMessage">
+          <Name>Tangible ProV ProVService Close Script Alert Rule AlertMessage</Name>
+          <Description>{1}</Description>
+	    </DisplayString>
+        <DisplayString ElementID="Tangible.ProV.ProVService.Close.Script.Task.Alert.Rule">
+          <Name>Tangible ProV ProVService Close Script Task Alert Rule</Name>
+        </DisplayString>
+		<DisplayString ElementID="Tangible.ProV.ProVService.Close.Script.Task.Alert.Rule.AlertMessage">
+          <Name>Tangible ProV ProVService Close Script Alert Task AlertMessage</Name>
+          <Description>{0}</Description>
+        </DisplayString>
+
 		<DisplayString ElementID="Tangible.ProV.ProVService.Event4402.Service.RebootRequired.Recovery.Rule">
           <Name>Tangible ProV ProVService Service Event4402 Reboot Required</Name>
         </DisplayString>
@@ -2355,7 +2830,10 @@ Event Description: {0}</Description>
         </DisplayString>
 
 		<DisplayString ElementID="Tangible.ProV.ProVService.Report.Script.Task">
-          <Name>Tangible ProV ProVService Report Script Alert Task</Name>
+          <Name>Tangible ProVService Report Script Alert Task</Name>
+        </DisplayString>
+		<DisplayString ElementID="Tangible.ProV.ProVService.Close.Script.Task">
+          <Name>Tangible ProVService Close Script Alert Task</Name>
         </DisplayString>
 
 		<DisplayString ElementID="Tangible.ProV.ProVService.Service.Monitor">
